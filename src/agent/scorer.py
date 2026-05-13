@@ -74,8 +74,14 @@ def score_against_mask(
 ) -> MaskScore:
     """Compute HUD vs preserve mean per-channel pixel diffs and pass/fail."""
     if reference.shape != candidate.shape:
-        raise ValueError(
-            f"reference shape {reference.shape} != candidate shape {candidate.shape}"
+        # Different Dolphin builds produce different resolutions; resize
+        # candidate to match reference so scoring still works.
+        from PIL import Image
+
+        h, w = reference.shape[:2]
+        candidate = np.asarray(
+            Image.fromarray(candidate).resize((w, h), Image.LANCZOS),
+            dtype=np.uint8,
         )
     if mask.shape != reference.shape[:2]:
         raise ValueError(

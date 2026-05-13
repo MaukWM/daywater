@@ -77,15 +77,109 @@ DumpFramesAsImages = True
 
 
 def _find_linux_dolphin() -> str:
-    """Return the name of the best available Dolphin binary on Linux."""
-    if shutil.which(DOLPHIN_LINUX_NOGUI):
-        return DOLPHIN_LINUX_NOGUI
-    if shutil.which(DOLPHIN_LINUX_GUI):
-        return DOLPHIN_LINUX_GUI
+    """Return the name of the best available Dolphin binary on Linux.
+
+    Checks $PATH first, then /usr/games (Debian/Ubuntu installs there).
+    """
+    for name in (DOLPHIN_LINUX_NOGUI, DOLPHIN_LINUX_GUI):
+        found = shutil.which(name)
+        if found:
+            return found
+    # Debian/Ubuntu put game binaries in /usr/games, often not in PATH
+    for name in (DOLPHIN_LINUX_NOGUI, DOLPHIN_LINUX_GUI):
+        path = Path(f"/usr/games/{name}")
+        if path.exists():
+            return str(path)
     raise FileNotFoundError(
-        f"Neither {DOLPHIN_LINUX_NOGUI} nor {DOLPHIN_LINUX_GUI} found in PATH. "
+        f"Neither {DOLPHIN_LINUX_NOGUI} nor {DOLPHIN_LINUX_GUI} found in PATH or /usr/games. "
         "Install Dolphin (e.g. `nix develop` in the spectre directory)."
     )
+
+
+def read_savestate_dolphin_version(savestate_path: Path) -> str | None:
+    """Read the Dolphin version string from a savestate header.
+
+    Returns the version string (e.g. "Dolphin [master] 2603a") or None if
+    the header can't be parsed.
+    """
+    try:
+        with savestate_path.open("rb") as f:
+            f.seek(0x20)
+            raw = f.read(64)
+            # Version string is null-terminated ASCII starting at offset 0x20
+            end = raw.find(b"\x00")
+            if end > 0:
+                return raw[:end].decode("ascii", errors="replace")
+    except OSError:
+        pass
+    return None
+
+
+def _get_running_dolphin_version() -> str | None:
+    """Query the installed Dolphin binary for its version string."""
+    try:
+        if _IS_LINUX:
+            dolphin_bin = _find_linux_dolphin()
+        elif _IS_MACOS:
+            dolphin_bin = str(DOLPHIN_MAC_BIN)
+        else:
+            return None
+        result = subprocess.run(
+            [dolphin_bin, "--version"],
+            capture_output=True, text=True, timeout=5,
+        )
+        # Output is like "Dolphin [master] 2603a" or "Dolphin 5.0-17995-g..."
+        version = (result.stdout.strip() or result.stderr.strip()).split("\n")[0]
+        return version if version else None
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        return None
+
+
+def _extract_build_number(version_str: str) -> str | None:
+    """Extract the numeric build identifier from a Dolphin version string.
+
+    "Dolphin [master] 2603a" -> "2603"
+    "Dolphin 5.0-17995-g..."  -> "17995"
+    """
+    import re
+
+    # Modern master: "Dolphin [master] 2603a" or "Dolphin [master] 2603"
+    m = re.search(r"\]\s*(\d+)", version_str)
+    if m:
+        return m.group(1)
+    # Debian stable: "Dolphin 5.0-17995-g..."
+    m = re.search(r"5\.0-(\d+)", version_str)
+    if m:
+        return m.group(1)
+    return None
+
+
+def check_savestate_compatibility(savestate_path: Path) -> None:
+    """Raise RuntimeError if the savestate was made with an incompatible Dolphin build.
+
+    Compares the build number embedded in the savestate header against the
+    running Dolphin binary. Mismatches cause silent load failures (Dolphin
+    falls through to the title screen).
+    """
+    sav_ver = read_savestate_dolphin_version(savestate_path)
+    if not sav_ver:
+        return  # can't parse header, skip check
+
+    run_ver = _get_running_dolphin_version()
+    if not run_ver:
+        return  # can't determine running version, skip check
+
+    sav_build = _extract_build_number(sav_ver)
+    run_build = _extract_build_number(run_ver)
+
+    if sav_build and run_build and sav_build != run_build:
+        raise RuntimeError(
+            f"Savestate was created with {sav_ver!r} but the installed "
+            f"Dolphin is {run_ver!r} (build {run_build} != {sav_build}). "
+            f"Savestates are not portable across Dolphin versions — the game "
+            f"will silently load to the title screen. Create a new savestate "
+            f"with the current Dolphin build."
+        )
 
 
 @dataclass(frozen=True)
@@ -164,8 +258,20 @@ def _build_command(
         ]
         if savestate is not None:
             dolphin_args.append(f"-s{savestate}")
-        if dolphin_bin == DOLPHIN_LINUX_NOGUI:
-            # True headless — no X server needed
+
+        # Headless display strategy:
+        # 1. If no DISPLAY and xvfb-run is available (Docker / CI): use xvfb
+        #    to provide a virtual X11 display. Do NOT use -pheadless because
+        #    older Dolphin builds (Debian 5.0-17995) fail to init the Software
+        #    backend in headless mode.
+        # 2. If DISPLAY is set or xvfb is absent: use -pheadless (works on
+        #    modern builds like nix 2603a) or assume a display exists.
+        if not os.environ.get("DISPLAY") and shutil.which("xvfb-run"):
+            return (
+                ["xvfb-run", "-a", "-s", "-screen 0 640x480x24", dolphin_bin, *dolphin_args],
+                False,
+            )
+        if dolphin_bin.endswith(DOLPHIN_LINUX_NOGUI):
             dolphin_args.insert(0, "-pheadless")
         return ([dolphin_bin, *dolphin_args], False)
 
@@ -186,7 +292,13 @@ def run_dolphin(
 
     Caller is responsible for pre-populating `user_dir` (Gecko INI, etc.) via
     `write_user_dir`. `log_path` receives Dolphin's combined stdout/stderr.
+
+    Raises RuntimeError if the savestate was created with an incompatible
+    Dolphin build (prevents silent title-screen fallthrough).
     """
+    if savestate is not None:
+        check_savestate_compatibility(savestate)
+
     args, uses_open_wrapper = _build_command(
         user_dir,
         iso,

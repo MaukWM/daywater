@@ -18,6 +18,7 @@ from src.dolphin import (
     extract_last_png,
     parse_gecko,
     read_game_id,
+    read_savestate_dolphin_version,
     run_dolphin,
 )
 from src.dolphin.runner import VideoBackend, write_user_dir
@@ -78,6 +79,12 @@ def main() -> int:
     savestate = args.savestate.resolve() if args.savestate else None
     if savestate is not None and not savestate.exists():
         logger.error("savestate_not_found", path=str(savestate))
+        return 2
+
+    if savestate is not None:
+        sav_ver = read_savestate_dolphin_version(savestate)
+        if sav_ver:
+            logger.info("savestate_version", version=sav_ver)
         return 2
 
     tmp_root = Path(tempfile.mkdtemp(prefix="spectre_probe_"))

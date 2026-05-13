@@ -34,20 +34,32 @@ class DiffStats(TypedDict):
     pct_pixels_changed: float
 
 
+MIN_FRAME_BYTES = 10_000  # skip tiny boot/transition frames
+
+
 def load_png_frames(d: Path) -> dict[int, Path]:
-    """Index a directory of Dolphin PNG frame dumps by frame number."""
+    """Index a directory of Dolphin PNG frame dumps by frame number.
+
+    Skips frames smaller than MIN_FRAME_BYTES (corrupt/truncated boot frames).
+    """
     out: dict[int, Path] = {}
     if not d.is_dir():
         return out
     for p in d.iterdir():
         m = FRAME_RE.search(p.name)
-        if m:
+        if m and p.stat().st_size >= MIN_FRAME_BYTES:
             out[int(m.group(1))] = p
     return out
 
 
 def load_image_rgb(p: Path) -> ImageArray:
-    """Load a PNG as a `(H, W, 3) uint8` NumPy array."""
+    """Load a PNG as a `(H, W, 3) uint8` NumPy array.
+
+    Tolerates truncated images by enabling Pillow's truncation flag.
+    """
+    from PIL import ImageFile
+
+    ImageFile.LOAD_TRUNCATED_IMAGES = True
     return np.asarray(Image.open(p).convert("RGB"), dtype=np.uint8)
 
 

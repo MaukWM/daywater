@@ -16,9 +16,11 @@ from src.dolphin.diff import diff_stats, load_png_frames
 from src.dolphin.gecko import GeckoCode, parse_gecko, render_gecko_ini
 from src.dolphin.runner import (
     RunResult,
+    check_savestate_compatibility,
     collect_dump,
     extract_last_png,
     read_game_id,
+    read_savestate_dolphin_version,
     run_dolphin,
 )
 
@@ -31,6 +33,7 @@ __all__ = [
     "load_png_frames",
     "parse_gecko",
     "read_game_id",
+    "read_savestate_dolphin_version",
     "render_gecko_ini",
     "run_dolphin",
 ]

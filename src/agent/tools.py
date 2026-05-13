@@ -34,7 +34,16 @@ from src.logging import logger
 
 
 def _png_to_data_url(p: Path) -> str:
-    b64 = base64.b64encode(p.read_bytes()).decode("ascii")
+    """Convert a PNG file to a data URL, re-encoding to ensure validity."""
+    from PIL import Image
+    import io
+
+    # Re-encode through Pillow to fix truncated/corrupt PNGs
+    img = Image.open(p)
+    img.load()  # force full decode
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
     return f"data:image/png;base64,{b64}"
 
 
