@@ -14,7 +14,22 @@ dependencies = [
 
     # Environment
     "python-dotenv>=1.0.0",
+
+    # Image / frame handling
+    "pillow>=11.0.0",
+    "numpy>=2.0.0",
 ]
+
+[project.scripts]
+spectre-probe = "src.cli.probe:main"
+spectre-diff = "src.cli.diff:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [dependency-groups]
 dev = [
