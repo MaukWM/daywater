@@ -7,18 +7,49 @@ mask image, without altering the rest of the rendered scene.
 
 ## Tooling
 
-You have one tool: `run_gecko(gecko_text)`.
+You have a full reverse-engineering toolset over the binary's Ghidra \
+analysis, plus one expensive tool for testing candidates:
 
-Each call:
+### Static analysis (free, call as much as you want)
 
-1. Spawns a fresh headless Dolphin run against a pinned ISO + savestate.
-2. Applies your Gecko code via Dolphin's per-game `GameSettings/<id>.ini`.
-3. Captures a frame from late in the run.
-4. Returns: per-region pixel-diff stats vs the reference baseline + the \
-   captured frame itself as an image.
+- `entry_points()` — list the binary's entry points. **Always start \
+  here.** This is where the program begins executing.
+- `find_function(pattern, limit=40)` — regex over function names \
+  (your renames included). Ghidra strips symbols by default so most \
+  names look like `FUN_80123456`; this is most useful after you've \
+  renamed functions.
+- `find_string(pattern, limit=25)` — regex over string literals in the \
+  binary. For each match, returns the string + the functions that \
+  reference it. **Hugely effective for finding code paths**: e.g. \
+  search for `hud`, `draw`, `health`, debug-print fragments, etc., \
+  and you'll often land directly on the relevant function.
+- `decompile(addr_or_name)` — C-like pseudocode for one function. \
+  Header shows the current name + your note (if any) + a compact \
+  callees/callers summary. Body has your renames substituted (so \
+  `render_loop()` instead of `FUN_80123456()` if you renamed it). \
+  Capped near 16 KB.
+- `callees(addr_or_name)` — functions called by this one. Walk *outward*.
+- `callers(addr_or_name)` — functions that call this one (xrefs to entry). \
+  Walk *inward*.
 
-Your budget is limited (you'll be told the count). Burn it on dumb \
-guesses and you'll run out.
+### Persistent annotation (free)
+
+- `rename_function(addr_or_name, new_name)` — rename a function. The \
+  new name applies to every future tool output, including substitutions \
+  inside other functions' decompiled bodies. **Use liberally** — \
+  rename anything you've figured out, so future calls read like real \
+  code instead of `FUN_xxxxxxxx()` soup.
+- `add_note(addr_or_name, text)` — attach a free-text note to a \
+  function. Appears in every future `decompile` header. Use for \
+  hypotheses, "ruled out because X", "called from main game loop", etc.
+
+### Verification (budget-capped)
+
+- `run_gecko(gecko_text)` — applies your candidate Gecko code, runs \
+  headless Dolphin against the pinned ISO + savestate, captures a frame, \
+  returns per-region pixel-diff stats vs the reference baseline + the \
+  captured frame itself as an image. **Budget-capped** (count given to \
+  you). Use only on candidates you have a real argument for.
 
 ## Gecko format you submit
 
@@ -74,25 +105,46 @@ Look at the screenshot, not just the numbers. A black screen scores \
 means your patch broke rendering entirely. The numbers + the image \
 together tell the full story.
 
-## Reality check on what you have
+## Suggested workflow
 
-You have **no ROM disassembly tool right now** and no memory-read tool. \
-That means without specific knowledge of where this game's HUD-render \
-function lives in memory, you cannot solve this by guessing addresses. \
-Random `04` writes at made-up addresses will either do nothing or \
-crash the emulator. If you have no specific target address in mind, \
-say so in your reasoning and submit your most-justifiable best guess \
-rather than burning the whole budget on random pokes. Future versions \
-of this tool will give you a Ghidra-backed disassembly view; for now, \
-work from prior knowledge of this specific game (007: Nightfire NTSC, \
-ID `GO7E69`) if you have any, or treat the run as a bounded experiment.
+Treat this like real RE work. Build up a mental model incrementally; \
+don't try to read the whole binary.
+
+1. **Start at `entry_points()`** to see where execution begins.
+2. **Decompile the entry function.** Skim it. Most of it is bootstrap \
+   (memory init, OS setup). Find the call into the main game loop. \
+   Rename what you understand (`rename_function`) so future reads are \
+   easier.
+3. **`find_string`** for terms related to your task: `hud`, `health`, \
+   `ammo`, `draw`, `render`, `gui`, `overlay`. Each hit gives you \
+   functions that reference that string — often directly the relevant \
+   code path. This is usually the fastest way in.
+4. **Walk the call graph.** `callees(...)` to see what a function \
+   delegates to; `callers(...)` to see who invokes it. Rename + note \
+   liberally as you understand. Build a map.
+5. **Identify a candidate patch site.** Either:
+   - A `bl <target>` call you want to NOP — write `60000000` at the \
+     `bl` instruction's address. Effect: the call is skipped.
+   - A function entry you want to BLR — write `4E800020` at the \
+     function's first instruction. Effect: the function returns \
+     immediately on entry, doing nothing.
+6. **Submit via `run_gecko`.** Read the screenshot AND the numbers. If \
+   HUD still visible → the patched function wasn't the HUD path; back \
+   to the call graph. If rendering broke (black screen / hand vanished \
+   / weird visual artifacts) → your patch had side effects beyond \
+   drawing; revert and try a more leaf-like helper.
+
+When you reach a hypothesis worth investing in, leave a brief note \
+on the relevant function with `add_note` so your reasoning survives \
+across turns. Same for `rename_function` — rename things you've \
+figured out. Future tool outputs show your names and notes back to \
+you, which keeps the binary readable as you go.
 
 ## Submission
 
-When you're confident, write your final Gecko code into the response. \
-The final answer is whatever your last call to `run_gecko` ran — if it \
-passes, you're done. If you run out of budget before passing, your last \
-attempt is graded anyway.
+When `run_gecko` returns **PASS**, you're done — submit the exact \
+`gecko_text` you passed in as your final answer and stop. If you run \
+out of budget without a PASS, submit your best attempt anyway.
 """
 
 

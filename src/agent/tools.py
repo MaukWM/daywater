@@ -31,6 +31,7 @@ from src.dolphin.runner import write_user_dir
 from src.logging import logger
 
 _BUDGET_KEY = "spectre_run_gecko_used"
+_LAST_PASS_KEY = "spectre_last_pass_gecko"
 
 
 def _png_to_data_url(p: Path) -> str:
@@ -123,6 +124,11 @@ def run_gecko(sample_dir: Path) -> Tool:
                 preserve_mean=round(score.preserve_mean, 2),
                 verdict=score.verdict,
             )
+
+            # Remember the most recent PASS so the final scorer can fall back
+            # to it if the agent forgets to submit a textual answer.
+            if score.passed:
+                store().set(_LAST_PASS_KEY, gecko_text)
 
             verdict_text = (
                 f"Call {call_idx}/{cfg.verify_budget} — verdict: {score.verdict}\n"

@@ -15,10 +15,20 @@ from inspect_ai import Task, task
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer
 from inspect_ai.solver import TaskState, basic_agent, system_message
 
+from src.agent.ghidra_tools import (
+    add_note,
+    callees,
+    callers,
+    decompile,
+    entry_points,
+    find_function,
+    find_string,
+    rename_function,
+)
 from src.agent.loader import build_sample, load_sample_config, resolve_runtime_paths
 from src.agent.prompts import SYSTEM_PROMPT
 from src.agent.scorer import load_mask, score_against_mask
-from src.agent.tools import run_gecko
+from src.agent.tools import _LAST_PASS_KEY, run_gecko
 from src.dolphin import (
     collect_dump,
     load_png_frames,
@@ -44,8 +54,20 @@ def hud_off_scorer(sample_dir: Path) -> Scorer:
     cfg = load_sample_config(sample_dir)
 
     async def score(state: TaskState, target: Target) -> Score:
+        from inspect_ai.util import store
+
         gecko_text = state.output.completion or ""
         codes = parse_gecko(gecko_text)
+        fallback_used = False
+        if not codes:
+            # Agent forgot to submit but a `run_gecko` call may have PASSed
+            # earlier. Fall back to the last PASSing gecko text the tool
+            # stashed in the Sample store.
+            stashed = store().get(_LAST_PASS_KEY)
+            if isinstance(stashed, str) and stashed.strip():
+                gecko_text = stashed
+                codes = parse_gecko(gecko_text)
+                fallback_used = bool(codes)
         if not codes:
             return Score(
                 value=INCORRECT,
@@ -85,13 +107,14 @@ def hud_off_scorer(sample_dir: Path) -> Scorer:
                 hud_min_mean=cfg.score_hud_min_mean,
                 preserve_max_mean=cfg.score_preserve_max_mean,
             )
+            note = " (scorer fell back to last PASSing tool call)" if fallback_used else ""
             return Score(
                 value=CORRECT if mask_score.passed else INCORRECT,
                 answer=gecko_text[:200],
                 explanation=(
                     f"hud_mean={mask_score.hud_mean:.2f} "
                     f"preserve_mean={mask_score.preserve_mean:.2f} "
-                    f"{mask_score.verdict} — {mask_score.reason()}"
+                    f"{mask_score.verdict} — {mask_score.reason()}{note}"
                 ),
             )
         finally:
@@ -104,13 +127,24 @@ def hud_off_scorer(sample_dir: Path) -> Scorer:
 def hud_off() -> Task:
     """Single-Sample HUD-removal task (Nightfire reference instance)."""
     sample_dir = SAMPLES_DIR / DEFAULT_SAMPLE
+    analysis_dir = sample_dir / "analysis"
     sample = build_sample(sample_dir)
     return Task(
         dataset=[sample],
         solver=basic_agent(
             init=system_message(SYSTEM_PROMPT),
-            tools=[run_gecko(sample_dir)],
-            message_limit=40,
+            tools=[
+                run_gecko(sample_dir),
+                entry_points(analysis_dir),
+                find_function(analysis_dir),
+                find_string(analysis_dir),
+                decompile(analysis_dir),
+                callees(analysis_dir),
+                callers(analysis_dir),
+                rename_function(analysis_dir),
+                add_note(analysis_dir),
+            ],
+            message_limit=200,
         ),
         scorer=hud_off_scorer(sample_dir),
     )

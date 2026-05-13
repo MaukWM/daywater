@@ -34,6 +34,7 @@ class SampleConfig:
     description: str
     iso_env: str
     savestate_env: str
+    binary_env: str | None       # optional ELF/DOL override env var name
     run_seconds: int
     verify_budget: int
     score_hud_min_mean: float
@@ -48,6 +49,7 @@ def load_sample_config(sample_dir: Path) -> SampleConfig:
         description=raw.get("description", ""),
         iso_env=raw["iso_env"],
         savestate_env=raw["savestate_env"],
+        binary_env=raw.get("binary_env"),
         run_seconds=int(raw["run_seconds"]),
         verify_budget=int(raw["verify_budget"]),
         score_hud_min_mean=float(raw["score_hud_min_mean"]),
@@ -69,6 +71,31 @@ def resolve_runtime_paths(cfg: SampleConfig) -> tuple[Path, Path]:
     if not sav_path.exists():
         raise FileNotFoundError(f"savestate not found at {sav_path} (from {cfg.savestate_env})")
     return iso_path, sav_path
+
+
+def resolve_binary_for_analysis(cfg: SampleConfig, sample_dir: Path) -> Path:
+    """Return the binary Ghidra should analyze.
+
+    Preference order:
+    1. `binary_env` from sample.toml, if set and the path exists. Typically
+       points at a full ELF reconstructed by a decomp project — covers RELs
+       and the entire address space.
+    2. `<sample_dir>/boot.dol` (extracted from the ISO by `extract_dol`).
+       Lower fidelity: REL-loaded code is invisible.
+    """
+    if cfg.binary_env:
+        raw = os.environ.get(cfg.binary_env)
+        if raw:
+            p = Path(raw).expanduser().resolve()
+            if p.exists():
+                return p
+    dol = (sample_dir / "boot.dol").resolve()
+    if dol.exists():
+        return dol
+    raise FileNotFoundError(
+        f"no analyzable binary: set {cfg.binary_env} to a real ELF, "
+        f"or run `scripts/build_analysis.py` to extract {dol} from the ISO first"
+    )
 
 
 def build_sample(sample_dir: Path) -> Sample:

@@ -12,6 +12,11 @@ description = "Disable the health and ammo HUD elements in 007: Nightfire NTSC."
 iso_env = "SPECTRE_NIGHTFIRE_ISO"
 savestate_env = "SPECTRE_NIGHTFIRE_SAV"
 
+# Optional: pre-merged ELF from a decomp project. When set, Ghidra
+# analyzes this instead of the DOL extracted from the ISO. Strongly
+# preferred — covers REL-loaded modules and the full address space.
+binary_env = "SPECTRE_NIGHTFIRE_ELF"
+
 # Dolphin run config.
 run_seconds = 10
 
