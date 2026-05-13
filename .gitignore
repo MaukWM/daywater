@@ -40,3 +40,7 @@ htmlcov/
 
 local_docs/
 local_scripts/
+
+# Local-only ROMs + Dolphin save states (licensed binaries, large)
+roms/
+runs/

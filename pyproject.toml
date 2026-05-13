@@ -18,6 +18,10 @@ dependencies = [
     # Image / frame handling
     "pillow>=11.0.0",
     "numpy>=2.0.0",
+
+    # Agent runtime
+    "inspect-ai>=0.3.140",
+    "openai>=1.40.0",
 ]
 
 [project.scripts]
