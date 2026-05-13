@@ -1,8 +1,22 @@
 .venv/
+.direnv/
 .git/
 .idea/
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
 __pycache__/
+*.pyc
 .env
 .env.local
+
+# Runtime data (mounted as volumes)
+cache/
+roms/
+logs/
+runs/
+
+# Dev files
+local_docs/
+local_scripts/
+*.egg-info/
