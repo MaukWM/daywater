@@ -1,0 +1,11 @@
+services:
+  spectre:
+    build: .
+    shm_size: "2g"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./roms:/data/roms:ro
+      - ./cache:/app/cache
+      - ./logs:/app/logs
