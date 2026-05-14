@@ -1,0 +1,467 @@
+/* Spectre Web UI */
+
+:root {
+  --bg: #0f1117;
+  --surface: #1a1d27;
+  --surface-hover: #232636;
+  --border: #2d3044;
+  --text: #e2e4e9;
+  --text-dim: #8b8fa3;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --success: #22c55e;
+  --error: #ef4444;
+  --warning: #f59e0b;
+  --radius: 8px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+header {
+  padding: 2rem;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  margin-top: 0.25rem;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* ── Steps ─────────────────────────────────────────────────────────────── */
+
+.step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  overflow: hidden;
+  transition: opacity 0.2s;
+}
+
+.step.locked {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.step.locked .step-body {
+  display: none;
+}
+
+.step.completed {
+  border-color: var(--success);
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  cursor: default;
+}
+
+.step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--border);
+  font-size: 0.85rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.step.completed .step-num {
+  background: var(--success);
+  color: #fff;
+}
+
+.step-header h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.step-status {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.step-body {
+  padding: 0 1.25rem 1.25rem;
+}
+
+/* ── Inputs & Buttons ──────────────────────────────────────────────────── */
+
+input[type="file"] {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+input[type="number"],
+textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  width: 100%;
+}
+
+input[type="number"] {
+  width: 80px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.5rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.or {
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ── Progress bar ──────────────────────────────────────────────────────── */
+
+.progress-bar {
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.2s;
+  width: 0%;
+}
+
+/* ── Info box ──────────────────────────────────────────────────────────── */
+
+.info-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.9rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text-dim);
+}
+
+.info-box.success {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.hint {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 0.75rem;
+}
+
+.spinner {
+  color: var(--warning);
+  font-size: 0.9rem;
+  margin-top: 0.75rem;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ── Mask toolbar ──────────────────────────────────────────────────────── */
+
+.mask-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.mask-toolbar label {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mask-toolbar input[type="range"] {
+  width: 100px;
+  accent-color: var(--accent);
+}
+
+.tool-btn, .zoom-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+
+.tool-btn.active, .zoom-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* ── Canvas ────────────────────────────────────────────────────────────── */
+
+#canvas-container {
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  display: inline-block;
+  cursor: crosshair;
+  overflow: hidden;
+  transition: transform 0.2s;
+  max-width: 100%;
+}
+
+#mask-canvas {
+  display: block;
+  width: 640px;
+  max-width: 100%;
+  height: auto;
+  image-rendering: auto;
+}
+
+#submit-mask-btn {
+  margin-top: 0.75rem;
+}
+
+/* ── Config panel ──────────────────────────────────────────────────────── */
+
+.config-panel {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.config-panel label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.config-row {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.config-row label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ── Event log ─────────────────────────────────────────────────────────── */
+
+#event-log {
+  margin-top: 1rem;
+}
+
+#event-log h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+#event-log-content {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  max-height: 400px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ── Results ───────────────────────────────────────────────────────────── */
+
+.verdict {
+  font-size: 1.8rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 1rem;
+}
+
+.verdict.pass {
+  color: var(--success);
+}
+
+.verdict.fail {
+  color: var(--error);
+}
+
+#result-gecko {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  margin: 1rem 0;
+  color: var(--success);
+}
+
+#result-frame-container {
+  margin-top: 1rem;
+}
+
+#result-frame-container h3 {
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+#result-frame {
+  max-width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+#inspect-link {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 1.25rem;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+#inspect-link:hover {
+  border-color: var(--accent);
+}
+
+#download-gecko-btn {
+  background: var(--success);
+}
+
+/* ── File pick ─────────────────────────────────────────────────────────── */
+
+.file-pick {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.file-label {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.progress-text {
+  font-size: 0.85rem;
+  color: var(--warning);
+  margin-top: 0.5rem;
+}
+
+.field-hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-weight: 400;
+  margin-top: 0.15rem;
+}
+
+.hint a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.hint a:hover {
+  text-decoration: underline;
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+
+@media (max-width: 700px) {
+  main {
+    padding: 0.75rem;
+  }
+
+  .mask-toolbar {
+    gap: 0.35rem;
+  }
+
+  #mask-canvas {
+    width: 100%;
+  }
+}

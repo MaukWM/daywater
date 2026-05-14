@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Spectre — GameCube HUD Cheat Discovery</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Spectre</h1>
+    <p class="subtitle">Automated GameCube HUD cheat discovery</p>
+  </header>
+
+  <main>
+    <!-- Step 1: Upload ISO -->
+    <section id="step-iso" class="step active">
+      <div class="step-header">
+        <span class="step-num">1</span>
+        <h2>Upload ISO</h2>
+        <span class="step-status" id="iso-status"></span>
+      </div>
+      <div class="step-body">
+        <div class="file-pick">
+          <input type="file" id="iso-input" accept=".iso,.nkit.iso,.rvz" onchange="onISOPicked(this)" />
+          <span id="iso-filename" class="file-label"></span>
+        </div>
+        <button id="iso-upload-btn" onclick="uploadISO()">Upload</button>
+        <div id="iso-progress" class="progress-bar" hidden>
+          <div class="progress-fill"></div>
+        </div>
+        <div id="iso-progress-text" class="progress-text" hidden></div>
+        <div id="iso-info" class="info-box" hidden></div>
+        <div id="survey-status" class="info-box" hidden></div>
+      </div>
+    </section>
+
+    <!-- Step 2: Upload Savestate -->
+    <section id="step-savestate" class="step locked">
+      <div class="step-header">
+        <span class="step-num">2</span>
+        <h2>Upload Savestate</h2>
+        <span class="step-status" id="savestate-status"></span>
+      </div>
+      <div class="step-body">
+        <p class="hint">Dolphin savestate (.s01/.sav) — must be created with <strong>Dolphin 2603a</strong> (the build bundled in this container). Savestates are not portable across Dolphin versions.</p>
+        <input type="file" id="savestate-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" />
+        <button id="savestate-upload-btn" onclick="uploadSavestate()">Upload</button>
+      </div>
+    </section>
+
+    <!-- Step 3: Screenshot / Reference Frame -->
+    <section id="step-screenshot" class="step locked">
+      <div class="step-header">
+        <span class="step-num">3</span>
+        <h2>Reference Frame</h2>
+        <span class="step-status" id="screenshot-status"></span>
+      </div>
+      <div class="step-body">
+        <div class="btn-group">
+          <button onclick="captureFrame()" id="capture-btn">Capture from Savestate</button>
+          <span class="or">or</span>
+          <input type="file" id="screenshot-input" accept="image/*" />
+          <button onclick="uploadScreenshot()">Upload Screenshot</button>
+        </div>
+        <div id="capture-spinner" class="spinner" hidden>Booting Dolphin and capturing frame...</div>
+      </div>
+    </section>
+
+    <!-- Step 4: Mask Painter -->
+    <section id="step-mask" class="step locked">
+      <div class="step-header">
+        <span class="step-num">4</span>
+        <h2>Paint HUD Mask</h2>
+        <span class="step-status" id="mask-status"></span>
+      </div>
+      <div class="step-body">
+        <p class="hint">Paint over HUD elements in <strong>white</strong>. Everything else stays black (preserved).</p>
+        <div class="mask-toolbar">
+          <button id="brush-btn" class="tool-btn active" onclick="setTool('brush')">Brush</button>
+          <button id="eraser-btn" class="tool-btn" onclick="setTool('eraser')">Eraser</button>
+          <label>Size: <input type="range" id="brush-size" min="4" max="80" value="20" oninput="updateBrushSize(this.value)"> <span id="brush-size-label">20</span>px</label>
+          <button onclick="maskUndo()">Undo</button>
+          <button onclick="maskRedo()">Redo</button>
+          <button onclick="maskClear()">Clear</button>
+          <span class="spacer"></span>
+          <label>Zoom: </label>
+          <button onclick="setZoom(1)" class="zoom-btn active" data-zoom="1">1x</button>
+          <button onclick="setZoom(2)" class="zoom-btn" data-zoom="2">2x</button>
+          <button onclick="setZoom(4)" class="zoom-btn" data-zoom="4">4x</button>
+        </div>
+        <div id="canvas-container">
+          <canvas id="mask-canvas" width="640" height="480"></canvas>
+        </div>
+        <button id="submit-mask-btn" onclick="submitMask()">Submit Mask</button>
+      </div>
+    </section>
+
+    <!-- Step 5: Run Agent -->
+    <section id="step-run" class="step locked">
+      <div class="step-header">
+        <span class="step-num">5</span>
+        <h2>Run Agent</h2>
+        <span class="step-status" id="run-status"></span>
+      </div>
+      <div class="step-body">
+        <div class="config-panel">
+          <label>Hint: <textarea id="hint-input" rows="2">Remove all HUD elements marked in the mask.</textarea></label>
+          <p class="hint">Task description given to the agent. Can include game-specific context.</p>
+          <div class="config-row">
+            <label>Budget: <input type="number" id="budget-input" value="8" min="1" max="20">
+              <span class="field-hint">Max Dolphin test runs the agent can use</span>
+            </label>
+            <label>Run seconds: <input type="number" id="run-seconds-input" value="10" min="5" max="60">
+              <span class="field-hint">Dolphin runtime per test (seconds)</span>
+            </label>
+          </div>
+        </div>
+        <button id="run-btn" onclick="startRun()">Start Agent Run</button>
+        <p class="hint" style="margin-top: 0.5rem;">
+          For detailed agent traces, open the <a id="inspect-link-inline" href="#" target="_blank">Inspect AI Viewer</a>.
+        </p>
+        <div id="event-log" hidden>
+          <h3>Agent Log</h3>
+          <pre id="event-log-content"></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- Step 6: Results -->
+    <section id="step-results" class="step locked">
+      <div class="step-header">
+        <span class="step-num">6</span>
+        <h2>Results</h2>
+      </div>
+      <div class="step-body">
+        <div id="result-verdict" class="verdict"></div>
+        <div id="result-details"></div>
+        <pre id="result-gecko"></pre>
+        <div class="btn-group">
+          <button id="download-gecko-btn" onclick="downloadGecko()" hidden>Download Gecko Code</button>
+          <a id="inspect-link" href="/inspect" target="_blank" hidden>Open Inspect AI Viewer</a>
+        </div>
+        <div id="result-frame-container" hidden>
+          <h3>Result Frame</h3>
+          <img id="result-frame" />
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/mask-painter.js"></script>
+  <script>
+    // ── State ──────────────────────────────────────────────────────────── //
+    let sessionId = null;
+    let eventSource = null;
+    const inspectUrl = 'http://' + window.location.hostname + ':7575';
+
+    // Set Inspect AI viewer links.
+    document.querySelectorAll('#inspect-link-inline, #inspect-link').forEach(el => {
+      el.href = inspectUrl;
+    });
+
+    // ── Helpers ────────────────────────────────────────────────────────── //
+
+    function unlockStep(id) {
+      document.getElementById(id).classList.remove('locked');
+      document.getElementById(id).classList.add('active');
+    }
+
+    function completeStep(id, text) {
+      const el = document.getElementById(id);
+      el.classList.add('completed');
+      const status = el.querySelector('.step-status');
+      if (status && text) status.textContent = text;
+    }
+
+    async function api(method, path, body, isFile) {
+      const opts = { method };
+      if (isFile) {
+        opts.body = body; // FormData
+      } else if (body) {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = JSON.stringify(body);
+      }
+      const res = await fetch(path, opts);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || JSON.stringify(err));
+      }
+      return res.json();
+    }
+
+    // ── Step 1: ISO Upload ────────────────────────────────────────────── //
+
+    function onISOPicked(input) {
+      const label = document.getElementById('iso-filename');
+      if (input.files.length) {
+        const f = input.files[0];
+        label.textContent = `${f.name} (${(f.size / 1e6).toFixed(0)} MB)`;
+      } else {
+        label.textContent = '';
+      }
+    }
+
+    async function uploadISO() {
+      const input = document.getElementById('iso-input');
+      if (!input.files.length) return alert('Select an ISO file first');
+
+      const file = input.files[0];
+
+      // Create session.
+      const { session_id } = await api('POST', '/api/session');
+      sessionId = session_id;
+
+      const form = new FormData();
+      form.append('file', file);
+
+      const btn = document.getElementById('iso-upload-btn');
+      btn.disabled = true;
+
+      const progress = document.getElementById('iso-progress');
+      const progressText = document.getElementById('iso-progress-text');
+      progress.hidden = false;
+      progressText.hidden = false;
+
+      try {
+        const result = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `/api/session/${sessionId}/upload/iso`);
+
+          let uploadDone = false;
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = (e.loaded / e.total) * 100;
+              progress.querySelector('.progress-fill').style.width = pct + '%';
+              const mb = (e.loaded / 1e6).toFixed(0);
+              const total = (e.total / 1e6).toFixed(0);
+              progressText.textContent = `Uploading: ${mb} / ${total} MB (${pct.toFixed(0)}%)`;
+            }
+          };
+          xhr.upload.onload = () => {
+            uploadDone = true;
+            progress.querySelector('.progress-fill').style.width = '100%';
+            progressText.textContent = 'Upload complete. Validating and hashing ISO...';
+          };
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              resolve(JSON.parse(xhr.responseText));
+            } else {
+              reject(new Error(xhr.responseText));
+            }
+          };
+          xhr.onerror = () => reject(new Error('Upload failed'));
+          xhr.send(form);
+        });
+
+        progressText.hidden = true;
+
+        const info = document.getElementById('iso-info');
+        info.hidden = false;
+        info.innerHTML = `<strong>Game ID:</strong> ${result.game_id} &nbsp;|&nbsp; <strong>SHA-1:</strong> ${result.sha1.slice(0, 12)}... &nbsp;|&nbsp; <strong>Size:</strong> ${(result.size / 1e6).toFixed(0)} MB`;
+
+        completeStep('step-iso', result.game_id);
+        unlockStep('step-savestate');
+
+        // Start polling survey status (shown under ISO step).
+        pollSurvey();
+      } catch (e) {
+        alert('ISO upload failed: ' + e.message);
+        progressText.textContent = 'Upload failed: ' + e.message;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload';
+      }
+    }
+
+    // ── Survey polling (shown under ISO step) ─────────────────────────── //
+
+    let surveyComplete = false;
+
+    async function pollSurvey() {
+      const surveyEl = document.getElementById('survey-status');
+      surveyEl.hidden = false;
+      surveyEl.textContent = 'Ghidra binary analysis starting...';
+
+      const poll = async () => {
+        if (!sessionId) return;
+        try {
+          const status = await api('GET', `/api/session/${sessionId}/status`);
+          if (status.survey_complete) {
+            surveyComplete = true;
+            surveyEl.textContent = `Analysis complete: ${status.survey_binaries_done} binaries analyzed`;
+            surveyEl.classList.add('success');
+            checkReady();
+            return;
+          }
+          const done = status.survey_binaries_done || 0;
+          const total = status.survey_binaries_total || '?';
+          surveyEl.textContent = `Analyzing binaries with Ghidra... (${done}/${total})`;
+          setTimeout(poll, 2000);
+        } catch {
+          setTimeout(poll, 3000);
+        }
+      };
+      poll();
+    }
+
+    let maskSubmitted = false;
+
+    function checkReady() {
+      // Run step unlocks when both survey is done AND mask is submitted.
+      if (surveyComplete && maskSubmitted) {
+        unlockStep('step-run');
+      }
+    }
+
+    // ── Step 2: Savestate Upload ──────────────────────────────────────── //
+
+    async function uploadSavestate() {
+      const input = document.getElementById('savestate-input');
+      if (!input.files.length) return alert('Select a savestate file first');
+
+      const form = new FormData();
+      form.append('file', input.files[0]);
+
+      try {
+        await api('POST', `/api/session/${sessionId}/upload/savestate`, form, true);
+        completeStep('step-savestate', 'uploaded');
+        unlockStep('step-screenshot');
+      } catch (e) {
+        alert('Savestate upload failed: ' + e.message);
+      }
+    }
+
+    // ── Step 3: Reference Frame ───────────────────────────────────────── //
+
+    async function captureFrame() {
+      const btn = document.getElementById('capture-btn');
+      const spinner = document.getElementById('capture-spinner');
+      btn.disabled = true;
+      spinner.hidden = false;
+
+      try {
+        const result = await api('POST', `/api/session/${sessionId}/capture`);
+        completeStep('step-screenshot', 'captured');
+        unlockStep('step-mask');
+        initMaskPainter(result.frame_url);
+      } catch (e) {
+        alert('Frame capture failed: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        spinner.hidden = true;
+      }
+    }
+
+    async function uploadScreenshot() {
+      const input = document.getElementById('screenshot-input');
+      if (!input.files.length) return alert('Select a screenshot first');
+
+      const form = new FormData();
+      form.append('file', input.files[0]);
+
+      try {
+        await api('POST', `/api/session/${sessionId}/upload/screenshot`, form, true);
+        completeStep('step-screenshot', 'uploaded');
+        unlockStep('step-mask');
+        initMaskPainter(`/api/session/${sessionId}/files/reference.png`);
+      } catch (e) {
+        alert('Screenshot upload failed: ' + e.message);
+      }
+    }
+
+    // ── Step 4: Mask ──────────────────────────────────────────────────── //
+
+    async function submitMask() {
+      const maskBlob = await exportMask();
+      const form = new FormData();
+      form.append('file', maskBlob, 'mask.png');
+
+      try {
+        const result = await api('POST', `/api/session/${sessionId}/mask`, form, true);
+        completeStep('step-mask', `${result.coverage_pct}% coverage`);
+        maskSubmitted = true;
+        if (surveyComplete) {
+          unlockStep('step-run');
+        } else {
+          // Show a note that we're waiting for survey.
+          document.getElementById('mask-status').textContent = 'Waiting for Ghidra analysis to finish...';
+        }
+        checkReady();
+      } catch (e) {
+        alert('Mask submit failed: ' + e.message);
+      }
+    }
+
+    // ── Step 5: Run Agent ─────────────────────────────────────────────── //
+
+    async function startRun() {
+      // Send config first.
+      await api('POST', `/api/session/${sessionId}/config`, {
+        hint: document.getElementById('hint-input').value,
+        verify_budget: parseInt(document.getElementById('budget-input').value),
+        run_seconds: parseInt(document.getElementById('run-seconds-input').value),
+      });
+
+      const btn = document.getElementById('run-btn');
+      btn.disabled = true;
+      btn.textContent = 'Running...';
+
+      const logEl = document.getElementById('event-log');
+      const logContent = document.getElementById('event-log-content');
+      logEl.hidden = false;
+      logContent.textContent = '';
+
+      try {
+        await api('POST', `/api/session/${sessionId}/run`);
+      } catch (e) {
+        alert('Failed to start run: ' + e.message);
+        btn.disabled = false;
+        btn.textContent = 'Start Agent Run';
+        return;
+      }
+
+      // Connect SSE.
+      eventSource = new EventSource(`/api/session/${sessionId}/events`);
+      eventSource.onmessage = (e) => {
+        const data = JSON.parse(e.data);
+
+        if (data.t === 'heartbeat') return;
+
+        // Format event for display.
+        let line = '';
+        if (data.t === 'survey_start') line = '[survey] Starting binary analysis...';
+        else if (data.t === 'survey_done') line = `[survey] Complete: ${data.binaries} binaries`;
+        else if (data.t === 'agent_start') line = '[agent] Agent started';
+        else if (data.t === 'tool_call') line = `[tool] ${data.fn}(${JSON.stringify(data.args || {}).slice(0, 80)})`;
+        else if (data.t === 'agent_done') line = `[result] ${data.verdict}`;
+        else if (data.t === 'agent_error') line = `[error] ${data.error}`;
+        else line = JSON.stringify(data);
+
+        logContent.textContent += line + '\n';
+        logContent.scrollTop = logContent.scrollHeight;
+
+        if (data.t === 'stream_end' || data.t === 'agent_done' || data.t === 'agent_error') {
+          eventSource.close();
+          btn.disabled = false;
+          btn.textContent = 'Start Agent Run';
+          loadResults();
+        }
+      };
+
+      eventSource.onerror = () => {
+        // Reconnection is automatic with EventSource, but check if done.
+        setTimeout(async () => {
+          try {
+            const status = await api('GET', `/api/session/${sessionId}/status`);
+            if (status.state === 'done' || status.state === 'failed') {
+              eventSource.close();
+              btn.disabled = false;
+              btn.textContent = 'Start Agent Run';
+              loadResults();
+            }
+          } catch { /* ignore */ }
+        }, 2000);
+      };
+    }
+
+    // ── Step 6: Results ───────────────────────────────────────────────── //
+
+    async function loadResults() {
+      try {
+        const result = await api('GET', `/api/session/${sessionId}/result`);
+        unlockStep('step-results');
+
+        const verdict = document.getElementById('result-verdict');
+        verdict.textContent = result.verdict;
+        verdict.className = 'verdict ' + (result.verdict === 'PASS' ? 'pass' : 'fail');
+
+        document.getElementById('result-gecko').textContent = result.gecko || '(no code found)';
+
+        if (result.gecko) {
+          document.getElementById('download-gecko-btn').hidden = false;
+        }
+
+        document.getElementById('inspect-link').hidden = false;
+        document.getElementById('inspect-link').href = 'http://' + window.location.hostname + ':7575';
+
+        if (result.has_frame) {
+          const fc = document.getElementById('result-frame-container');
+          fc.hidden = false;
+          document.getElementById('result-frame').src = `/api/session/${sessionId}/files/result_frame.png`;
+        }
+      } catch (e) {
+        console.error('Failed to load results:', e);
+      }
+    }
+
+    function downloadGecko() {
+      window.open(`/api/session/${sessionId}/result.gecko`, '_blank');
+    }
+  </script>
+</body>
+</html>

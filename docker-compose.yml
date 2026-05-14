@@ -1,7 +1,29 @@
 services:
+  spectre-web:
+    build: .
+    shm_size: "2g"
+    ports:
+      - "7860:7860"   # Spectre web UI
+      - "7575:7575"   # Inspect AI log viewer
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - INSPECT_EVAL_MODEL=${INSPECT_EVAL_MODEL:-openai/gpt-5.5}
+      - SPECTRE_GHIDRA_HOME=/opt/ghidra
+      - _JAVA_OPTIONS=-Xmx4g
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./sessions:/app/sessions
+      - ./cache:/app/cache
+      - ./logs:/app/logs
+      - ./roms:/data/roms:ro
+      - ./src/web/static:/app/src/web/static:ro  # hot-reload frontend in dev
+    command: ["spectre-web"]
+
+  # Legacy CLI-only service (optional, for manual runs).
   spectre:
     build: .
     shm_size: "2g"
+    profiles: ["cli"]
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}

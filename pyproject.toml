@@ -25,11 +25,17 @@ dependencies = [
 
     # Static analysis (Ghidra-as-a-library; requires SPECTRE_GHIDRA_HOME)
     "pyghidra>=2.0.0",
+
+    # Web frontend
+    "fastapi>=0.115.0",
+    "uvicorn>=0.34.0",
+    "python-multipart>=0.0.20",
 ]
 
 [project.scripts]
 spectre-probe = "src.cli.probe:main"
 spectre-diff = "src.cli.diff:main"
+spectre-web = "src.web.app:main"
 
 [build-system]
 requires = ["hatchling"]

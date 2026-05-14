@@ -64,3 +64,6 @@ samples/*/analysis/
 # Machine-local, ~50 MB+ per binary; rebuilt on demand. Notes/renames
 # live inside `cache/binaries/<sha1>/notes.json` (mutable per binary).
 cache/
+
+# Web UI session data (uploads, masks, results — ephemeral per-run)
+sessions/

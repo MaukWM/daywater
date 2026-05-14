@@ -74,10 +74,12 @@ ENV _JAVA_OPTIONS="-Xmx4g"
 
 # Non-root user for runtime. Reuse ubuntu's UID 1000 (default in the base
 # image) so bind-mounted volumes are readable/writable on the host.
-RUN mkdir -p /data/roms /app/cache /app/logs \
+RUN mkdir -p /data/roms /app/cache /app/logs /app/sessions \
     && chown -R 1000:1000 /app /data
 
 USER 1000
 
+EXPOSE 7860 7575
+
 ENTRYPOINT ["uv", "run"]
-CMD ["spectre-probe", "--help"]
+CMD ["spectre-web"]
