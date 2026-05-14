@@ -3,7 +3,31 @@
 Automatically find scene-manipulation Gecko cheats (HUD removal only currently) for GameCube games. Given a ROM, a reference frame, and a HUD mask, the agent iterates Gecko candidates against a Dolphin verifier.
 
 
-## Prerequisites
+## Web UI (Docker)
+
+The easiest way to run spectre. Bundles Dolphin 2603a, Ghidra 12.0.4, and
+everything else in a single container.
+
+```bash
+cd spectre
+echo "OPENAI_API_KEY=sk-..." > .env
+docker compose up --build -d
+```
+
+- **Web UI:** `http://localhost:7860` — upload ISO, savestate, paint mask, run agent
+- **Inspect AI viewer:** `http://localhost:7575` — detailed agent traces and scoring
+
+The workflow: upload ISO (Ghidra analyzes binaries in background) → upload
+savestate → capture reference frame or upload screenshot → paint HUD mask →
+run agent → view results and download Gecko code.
+
+Savestates must be created with **Dolphin 2603a** (the build in the
+container). Override the model with `INSPECT_EVAL_MODEL` in `.env`
+(defaults to `openai/gpt-4o`).
+
+**Requirements:** Docker, 8 GB+ RAM (16 GB recommended).
+
+## Prerequisites (local dev)
 
 | Tool | Purpose | Required for |
 |---|---|---|
