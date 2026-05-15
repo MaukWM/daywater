@@ -1,4 +1,4 @@
-"""Build an Inspect AI Sample + Task from web session files.
+"""Build an Inspect AI Sample + Task from web project/task files.
 
 Bridges the web layer to the existing agent pipeline. Produces the same
 data structures as `src.agent.loader.build_sample` but from uploaded
@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from inspect_ai import Task
+from inspect_ai import Task as InspectTask
 from inspect_ai.dataset import Sample
 from inspect_ai.model import ChatMessageUser, ContentImage, ContentText
 from inspect_ai.scorer import CORRECT, INCORRECT, Score, Scorer, Target, accuracy, scorer
-from inspect_ai.solver import TaskState, basic_agent, system_message
+from inspect_ai.solver import TaskState as InspectTaskState
+from inspect_ai.solver import basic_agent, system_message
 from inspect_ai.tool import Tool, ToolResult, tool
 from inspect_ai.util import store as inspect_store
 
@@ -39,51 +40,49 @@ from src.agent.tools import _LAST_PASS_KEY
 from src.dolphin import collect_dump, load_png_frames, parse_gecko, read_game_id, run_dolphin
 from src.dolphin.diff import load_image_rgb
 from src.dolphin.runner import write_user_dir
-from src.web.sessions import Session
+from src.web.sessions import Project, Task
 
 
-def build_sample_from_session(session: Session) -> Sample:
-    """Construct an Inspect AI Sample from a web session's uploaded files."""
-    cfg = session.config
-    inv_block = f"\n{cfg.inventory_text}\n" if cfg.inventory_text else ""
+def build_sample_from_task(task: Task, project: Project) -> Sample:
+    """Construct an Inspect AI Sample from a project's task files."""
+    pcfg = project.config
+    tcfg = task.config
+    inv_block = f"\n{pcfg.inventory_text}\n" if pcfg.inventory_text else ""
 
     body = (
         f"{TASK_INPUT_PREFIX}\n\n"
-        f"Game: {cfg.game_id}\n"
-        f"Budget: {cfg.verify_budget} tool calls.\n"
-        f"Scoring thresholds: HUD region mean diff >= {cfg.hud_min_mean}, "
-        f"preserve region mean diff <= {cfg.preserve_max_mean}.\n"
+        f"Game: {pcfg.game_id}\n"
+        f"Budget: {tcfg.verify_budget} tool calls.\n"
+        f"Scoring thresholds: HUD region mean diff >= {tcfg.hud_min_mean}, "
+        f"preserve region mean diff <= {tcfg.preserve_max_mean}.\n"
         f"{inv_block}\n"
-        f"Hint:\n{cfg.hint}"
+        f"Hint:\n{tcfg.hint}"
     )
 
     user_message = ChatMessageUser(
         content=[
             ContentText(text=body),
             ContentText(text="Reference frame (HUD currently present):"),
-            ContentImage(image=str(session.reference_path)),
+            ContentImage(image=str(task.reference_path)),
             ContentText(text="Mask (white = HUD to remove, black = must preserve):"),
-            ContentImage(image=str(session.mask_path)),
+            ContentImage(image=str(task.mask_path)),
         ],
     )
 
     return Sample(
-        id=f"web_{session.session_id}",
+        id=f"web_{project.project_id}_{task.task_id}",
         input=[user_message],
         target="",
         metadata={
-            "session_id": session.session_id,
-            "game_id": cfg.game_id,
+            "project_id": project.project_id,
+            "task_id": task.task_id,
+            "game_id": pcfg.game_id,
         },
     )
 
 
-def _build_run_gecko_for_session(session: Session):  # type: ignore[no-untyped-def]
-    """Build the run_gecko tool bound to a web session's files.
-
-    Mirrors src.agent.tools.run_gecko but reads paths from the session
-    instead of a sample.toml directory.
-    """
+def _build_run_gecko_for_task(task: Task, project: Project):  # type: ignore[no-untyped-def]
+    """Build the run_gecko tool bound to a project task's files."""
     import base64
     import io
     import shutil
@@ -93,7 +92,7 @@ def _build_run_gecko_for_session(session: Session):  # type: ignore[no-untyped-d
 
     from src.agent.state import BUDGET_KEY, LAST_PASS_KEY
 
-    cfg = session.config
+    tcfg = task.config
 
     @tool
     def run_gecko() -> Tool:
@@ -105,33 +104,34 @@ def _build_run_gecko_for_session(session: Session):  # type: ignore[no-untyped-d
                     pair lines.
             """
             used = int(inspect_store().get(BUDGET_KEY, 0))
-            if used >= cfg.verify_budget:
+            if used >= tcfg.verify_budget:
                 return (
-                    f"Budget exhausted ({used}/{cfg.verify_budget}). "
+                    f"Budget exhausted ({used}/{tcfg.verify_budget}). "
                     f"Submit your best answer."
                 )
             inspect_store().set(BUDGET_KEY, used + 1)
             call_idx = used + 1
-            remaining = cfg.verify_budget - call_idx
+            remaining = tcfg.verify_budget - call_idx
 
             codes = parse_gecko(gecko_text)
             if not codes:
                 return (
-                    f"Call {call_idx}/{cfg.verify_budget}: empty gecko text. "
+                    f"Call {call_idx}/{tcfg.verify_budget}: empty gecko text. "
                     f"({remaining} calls remaining)"
                 )
 
+            iso_path = project.iso_path.resolve()
             tmp_root = Path(tempfile.mkdtemp(prefix="spectre_web_tool_"))
             try:
                 user_dir = tmp_root / "user"
-                game_id = read_game_id(session.iso_path)
+                game_id = read_game_id(iso_path)
                 write_user_dir(user_dir, game_id, codes)
                 run_dolphin(
                     user_dir=user_dir,
-                    iso=session.iso_path.resolve(),
+                    iso=iso_path,
                     log_path=tmp_root / "dolphin.log",
-                    savestate=session.savestate_path,
-                    run_seconds=cfg.run_seconds,
+                    savestate=task.savestate_path,
+                    run_seconds=tcfg.run_seconds,
                 )
                 frames_dir = tmp_root / "frames"
                 collect_dump(user_dir, frames_dir)
@@ -139,17 +139,17 @@ def _build_run_gecko_for_session(session: Session):  # type: ignore[no-untyped-d
 
                 if not frames:
                     return (
-                        f"Call {call_idx}/{cfg.verify_budget}: no frames produced. "
+                        f"Call {call_idx}/{tcfg.verify_budget}: no frames produced. "
                         f"({remaining} calls remaining)"
                     )
 
                 candidate_png = frames[max(frames)]
                 score = score_against_mask(
-                    reference=load_image_rgb(session.reference_path),
+                    reference=load_image_rgb(task.reference_path),
                     candidate=load_image_rgb(candidate_png),
-                    mask=load_mask(session.mask_path),
-                    hud_min_mean=cfg.hud_min_mean,
-                    preserve_max_mean=cfg.preserve_max_mean,
+                    mask=load_mask(task.mask_path),
+                    hud_min_mean=tcfg.hud_min_mean,
+                    preserve_max_mean=tcfg.preserve_max_mean,
                 )
 
                 if score.passed:
@@ -164,11 +164,11 @@ def _build_run_gecko_for_session(session: Session):  # type: ignore[no-untyped-d
                 data_url = f"data:image/png;base64,{b64}"
 
                 verdict_text = (
-                    f"Call {call_idx}/{cfg.verify_budget} -- verdict: {score.verdict}\n"
+                    f"Call {call_idx}/{tcfg.verify_budget} -- verdict: {score.verdict}\n"
                     f"  hud_mean      = {score.hud_mean:.2f}  "
-                    f"(need >= {cfg.hud_min_mean})\n"
+                    f"(need >= {tcfg.hud_min_mean})\n"
                     f"  preserve_mean = {score.preserve_mean:.2f}  "
-                    f"(need <= {cfg.preserve_max_mean})\n"
+                    f"(need <= {tcfg.preserve_max_mean})\n"
                     f"  {score.reason()}\n"
                     f"  ({remaining} calls remaining)"
                 )
@@ -185,11 +185,11 @@ def _build_run_gecko_for_session(session: Session):  # type: ignore[no-untyped-d
 
 
 @scorer(metrics=[accuracy()])
-def web_scorer(session: Session) -> Scorer:
-    """Grade the agent's final submission for a web session."""
-    cfg = session.config
+def web_scorer(task: Task, project: Project) -> Scorer:
+    """Grade the agent's final submission for a web task."""
+    tcfg = task.config
 
-    async def score(state: TaskState, target: Target) -> Score:
+    async def score(state: InspectTaskState, target: Target) -> Score:
         gecko_text = state.output.completion or ""
         codes = parse_gecko(gecko_text)
         fallback_used = False
@@ -209,17 +209,18 @@ def web_scorer(session: Session) -> Scorer:
         import shutil
         import tempfile
 
+        iso_path = project.iso_path.resolve()
         tmp_root = Path(tempfile.mkdtemp(prefix="spectre_web_score_"))
         try:
             user_dir = tmp_root / "user"
-            game_id = read_game_id(session.iso_path.resolve())
+            game_id = read_game_id(iso_path)
             write_user_dir(user_dir, game_id, codes)
             run_dolphin(
                 user_dir=user_dir,
-                iso=session.iso_path.resolve(),
+                iso=iso_path,
                 log_path=tmp_root / "dolphin.log",
-                savestate=session.savestate_path,
-                run_seconds=cfg.run_seconds,
+                savestate=task.savestate_path,
+                run_seconds=tcfg.run_seconds,
             )
             frames_dir = tmp_root / "frames"
             collect_dump(user_dir, frames_dir)
@@ -233,17 +234,17 @@ def web_scorer(session: Session) -> Scorer:
 
             last_frame = frames[max(frames)]
 
-            # Copy result frame to session dir for the web UI.
+            # Copy result frame to task dir for the web UI.
             import shutil as _sh
 
-            _sh.copy2(str(last_frame), str(session.result_frame_path))
+            _sh.copy2(str(last_frame), str(task.result_frame_path))
 
             mask_score = score_against_mask(
-                reference=load_image_rgb(session.reference_path),
+                reference=load_image_rgb(task.reference_path),
                 candidate=load_image_rgb(last_frame),
-                mask=load_mask(session.mask_path),
-                hud_min_mean=cfg.hud_min_mean,
-                preserve_max_mean=cfg.preserve_max_mean,
+                mask=load_mask(task.mask_path),
+                hud_min_mean=tcfg.hud_min_mean,
+                preserve_max_mean=tcfg.preserve_max_mean,
             )
             note = " (fallback)" if fallback_used else ""
             return Score(
@@ -261,20 +262,21 @@ def web_scorer(session: Session) -> Scorer:
     return score
 
 
-def build_task_from_session(
-    session: Session,
+def build_task_from_project_task(
+    task: Task,
+    project: Project,
     iso_path: Path,
     extract_root: Path,
-) -> Task:
-    """Build a full Inspect AI Task from a web session."""
-    sample = build_sample_from_session(session)
+) -> InspectTask:
+    """Build a full Inspect AI Task from a web project task."""
+    sample = build_sample_from_task(task, project)
 
-    return Task(
+    return InspectTask(
         dataset=[sample],
         solver=basic_agent(
             init=system_message(SYSTEM_PROMPT),
             tools=[
-                _build_run_gecko_for_session(session),
+                _build_run_gecko_for_task(task, project),
                 entry_points(),
                 find_function(),
                 find_string(),
@@ -290,5 +292,5 @@ def build_task_from_session(
             ],
             message_limit=200,
         ),
-        scorer=web_scorer(session),
+        scorer=web_scorer(task, project),
     )

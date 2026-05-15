@@ -1,4 +1,4 @@
-"""Session management: directory layout, state machine, persistence."""
+"""Data model: Project (one game/ISO) and Task (one agent run within a project)."""
 
 from __future__ import annotations
 
@@ -12,13 +12,15 @@ from typing import Any
 
 from src.logging import logger
 
-SESSIONS_ROOT = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
+PROJECTS_ROOT = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
 ISO_CACHE_ROOT = Path("/app/cache/isos") if Path("/app/cache").exists() else Path("./cache/isos")
 
 
-class SessionState(StrEnum):
+# ── Task state machine ─────────────────────────────────────────────────── #
+
+
+class TaskState(StrEnum):
     CREATED = "created"
-    ISO_UPLOADED = "iso_uploaded"
     SAVESTATE_UPLOADED = "savestate_uploaded"
     FRAME_READY = "frame_ready"
     MASK_READY = "mask_ready"
@@ -28,26 +30,26 @@ class SessionState(StrEnum):
     FAILED = "failed"
 
 
-# Valid state transitions. Survey runs independently (tracked by survey_complete flag).
-_TRANSITIONS: dict[SessionState, set[SessionState]] = {
-    SessionState.CREATED: {SessionState.ISO_UPLOADED},
-    SessionState.ISO_UPLOADED: {SessionState.SAVESTATE_UPLOADED},
-    SessionState.SAVESTATE_UPLOADED: {SessionState.FRAME_READY},
-    SessionState.FRAME_READY: {SessionState.MASK_READY},
-    SessionState.MASK_READY: {SessionState.READY},
-    SessionState.READY: {SessionState.RUNNING},
-    SessionState.RUNNING: {SessionState.DONE, SessionState.FAILED},
-    SessionState.DONE: {SessionState.READY},
-    SessionState.FAILED: {SessionState.READY},
+_TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
+    TaskState.CREATED: {TaskState.SAVESTATE_UPLOADED},
+    TaskState.SAVESTATE_UPLOADED: {TaskState.FRAME_READY},
+    TaskState.FRAME_READY: {TaskState.FRAME_READY, TaskState.MASK_READY},
+    TaskState.MASK_READY: {TaskState.FRAME_READY, TaskState.READY},
+    TaskState.READY: {TaskState.RUNNING},
+    TaskState.RUNNING: {TaskState.DONE, TaskState.FAILED},
+    TaskState.DONE: {TaskState.READY},
+    TaskState.FAILED: {TaskState.READY},
 }
 
 
-@dataclass
-class SessionConfig:
-    """Persisted session metadata."""
+# ── Config dataclasses ─────────────────────────────────────────────────── #
 
-    session_id: str
-    state: SessionState = SessionState.CREATED
+
+@dataclass
+class ProjectConfig:
+    """Persisted project metadata (one per game/ISO)."""
+
+    project_id: str
     created_at: float = field(default_factory=time.time)
 
     # Set after ISO upload.
@@ -55,11 +57,21 @@ class SessionConfig:
     iso_sha1: str = ""
     iso_size: int = 0
 
-    # Survey progress.
+    # Ghidra survey progress.
     survey_binaries_total: int = 0
     survey_binaries_done: int = 0
     survey_complete: bool = False
     inventory_text: str = ""
+
+
+@dataclass
+class TaskConfig:
+    """Persisted task metadata (one agent run within a project)."""
+
+    task_id: str
+    task_type: str = "hud_detection"
+    state: TaskState = TaskState.CREATED
+    created_at: float = field(default_factory=time.time)
 
     # Agent config (editable before run).
     run_seconds: int = 10
@@ -75,25 +87,23 @@ class SessionConfig:
     result_preserve_mean: float = 0.0
 
 
-class Session:
-    """Manages one session's directory and state."""
+# ── Task ────────────────────────────────────────────────────────────────── #
 
-    def __init__(self, root: Path, config: SessionConfig) -> None:
+
+class Task:
+    """Manages one task's directory and state within a project."""
+
+    def __init__(self, root: Path, config: TaskConfig) -> None:
         self.root = root
         self.config = config
 
     @property
-    def session_id(self) -> str:
-        return self.config.session_id
+    def task_id(self) -> str:
+        return self.config.task_id
 
     @property
-    def state(self) -> SessionState:
+    def state(self) -> TaskState:
         return self.config.state
-
-    # Well-known file paths within the session directory.
-    @property
-    def iso_path(self) -> Path:
-        return self.root / "iso.iso"
 
     @property
     def savestate_path(self) -> Path:
@@ -123,27 +133,23 @@ class Session:
     def result_frame_path(self) -> Path:
         return self.root / "result_frame.png"
 
-    def transition(self, new_state: SessionState) -> None:
-        """Advance the state machine. Raises ValueError on illegal transition."""
-        allowed = _TRANSITIONS.get(self.state, set())
+    def transition(self, new_state: TaskState) -> None:
+        allowed = _TASK_TRANSITIONS.get(self.state, set())
         if new_state not in allowed:
             raise ValueError(f"cannot transition {self.state} -> {new_state}")
-        logger.info("session_transition", session=self.session_id, old=self.state, new=new_state)
+        logger.info("task_transition", task=self.task_id, old=self.state, new=new_state)
         self.config.state = new_state
         self.save()
 
     def save(self) -> None:
-        """Persist config to disk."""
         self.config_path.write_text(json.dumps(asdict(self.config), indent=2))
 
     def append_event(self, event: dict[str, Any]) -> None:
-        """Append a JSON line to the session's event log."""
         event.setdefault("ts", time.time())
         with self.events_path.open("a") as f:
             f.write(json.dumps(event) + "\n")
 
     def status_dict(self) -> dict[str, Any]:
-        """Return a status summary suitable for the API."""
         d = asdict(self.config)
         d["has_savestate"] = self.savestate_path.exists()
         d["has_reference"] = self.reference_path.exists()
@@ -151,37 +157,122 @@ class Session:
         return d
 
 
-class SessionStore:
-    """Manages all sessions on disk."""
+# ── Project ─────────────────────────────────────────────────────────────── #
 
-    def __init__(self, root: Path | None = None) -> None:
-        self.root = root or SESSIONS_ROOT
-        self.root.mkdir(parents=True, exist_ok=True)
 
-    def create(self) -> Session:
-        sid = uuid.uuid4().hex[:12]
-        session_dir = self.root / sid
-        session_dir.mkdir(parents=True)
-        config = SessionConfig(session_id=sid)
-        session = Session(session_dir, config)
-        session.save()
-        logger.info("session_created", session=sid)
-        return session
+class Project:
+    """Manages one project (game/ISO) and its tasks."""
 
-    def get(self, session_id: str) -> Session | None:
-        session_dir = self.root / session_id
-        config_path = session_dir / "config.json"
+    def __init__(self, root: Path, config: ProjectConfig) -> None:
+        self.root = root
+        self.config = config
+
+    @property
+    def project_id(self) -> str:
+        return self.config.project_id
+
+    @property
+    def game_id(self) -> str:
+        return self.config.game_id
+
+    @property
+    def iso_path(self) -> Path:
+        return self.root / "iso.iso"
+
+    @property
+    def config_path(self) -> Path:
+        return self.root / "config.json"
+
+    @property
+    def events_path(self) -> Path:
+        return self.root / "events.jsonl"
+
+    @property
+    def tasks_dir(self) -> Path:
+        return self.root / "tasks"
+
+    def save(self) -> None:
+        self.config_path.write_text(json.dumps(asdict(self.config), indent=2))
+
+    def append_event(self, event: dict[str, Any]) -> None:
+        event.setdefault("ts", time.time())
+        with self.events_path.open("a") as f:
+            f.write(json.dumps(event) + "\n")
+
+    def status_dict(self) -> dict[str, Any]:
+        d = asdict(self.config)
+        d["task_count"] = len(list(self.tasks_dir.iterdir())) if self.tasks_dir.exists() else 0
+        return d
+
+    # ── Task management ───────────────────────────────────────────────── #
+
+    def create_task(self, task_type: str = "hud_detection") -> Task:
+        self.tasks_dir.mkdir(parents=True, exist_ok=True)
+        tid = uuid.uuid4().hex[:8]
+        task_dir = self.tasks_dir / tid
+        task_dir.mkdir()
+        config = TaskConfig(task_id=tid, task_type=task_type)
+        task = Task(task_dir, config)
+        task.save()
+        logger.info("task_created", project=self.project_id, task=tid, type=task_type)
+        return task
+
+    def get_task(self, task_id: str) -> Task | None:
+        task_dir = self.tasks_dir / task_id
+        config_path = task_dir / "config.json"
         if not config_path.exists():
             return None
         raw = json.loads(config_path.read_text())
-        config = SessionConfig(**raw)
-        return Session(session_dir, config)
+        return Task(task_dir, TaskConfig(**raw))
 
-    def list_sessions(self) -> list[SessionConfig]:
-        sessions = []
+    def list_tasks(self) -> list[TaskConfig]:
+        if not self.tasks_dir.exists():
+            return []
+        tasks = []
+        for d in sorted(self.tasks_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            cfg = d / "config.json"
+            if cfg.exists():
+                raw = json.loads(cfg.read_text())
+                tasks.append(TaskConfig(**raw))
+        return tasks
+
+
+# ── ProjectStore ────────────────────────────────────────────────────────── #
+
+
+class ProjectStore:
+    """Manages all projects on disk."""
+
+    def __init__(self, root: Path | None = None) -> None:
+        self.root = root or PROJECTS_ROOT
+        self.root.mkdir(parents=True, exist_ok=True)
+
+    def create(self) -> Project:
+        pid = uuid.uuid4().hex[:12]
+        project_dir = self.root / pid
+        project_dir.mkdir(parents=True)
+        config = ProjectConfig(project_id=pid)
+        project = Project(project_dir, config)
+        project.save()
+        logger.info("project_created", project=pid)
+        return project
+
+    def get(self, project_id: str) -> Project | None:
+        project_dir = self.root / project_id
+        config_path = project_dir / "config.json"
+        if not config_path.exists():
+            return None
+        raw = json.loads(config_path.read_text())
+        return Project(project_dir, ProjectConfig(**raw))
+
+    def list_projects(self) -> list[ProjectConfig]:
+        projects = []
         for d in sorted(self.root.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            cfg_path = d / "config.json"
-            if cfg_path.exists():
-                raw = json.loads(cfg_path.read_text())
-                sessions.append(SessionConfig(**raw))
-        return sessions
+            cfg = d / "config.json"
+            if cfg.exists():
+                try:
+                    raw = json.loads(cfg.read_text())
+                    projects.append(ProjectConfig(**raw))
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        return projects

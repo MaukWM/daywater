@@ -3,24 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Spectre — GameCube HUD Cheat Discovery</title>
+  <title>SPECTRE</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header>
-    <h1>Spectre</h1>
-    <p class="subtitle">Automated GameCube HUD cheat discovery</p>
+    <h1>SPECTRE</h1>
+    <p class="subtitle">gamecube reverse engineering platform</p>
   </header>
 
   <main>
-    <!-- Step 1: Upload ISO -->
-    <section id="step-iso" class="step active">
-      <div class="step-header">
-        <span class="step-num">1</span>
-        <h2>Upload ISO</h2>
-        <span class="step-status" id="iso-status"></span>
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- VIEW: Dashboard                                                -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-dashboard" class="view">
+      <div class="section-header">
+        <h2>Projects</h2>
       </div>
-      <div class="step-body">
+
+      <ul class="project-list" id="project-list"></ul>
+      <div id="no-projects" class="empty-state" hidden>
+        No projects yet. Upload an ISO to get started.
+      </div>
+
+      <div class="upload-form">
+        <label>New project &mdash; upload a GameCube ISO:</label>
         <div class="file-pick">
           <input type="file" id="iso-input" accept=".iso,.nkit.iso,.rvz" onchange="onISOPicked(this)" />
           <span id="iso-filename" class="file-label"></span>
@@ -30,142 +39,207 @@
           <div class="progress-fill"></div>
         </div>
         <div id="iso-progress-text" class="progress-text" hidden></div>
-        <div id="iso-info" class="info-box" hidden></div>
-        <div id="survey-status" class="info-box" hidden></div>
       </div>
-    </section>
+    </div>
 
-    <!-- Step 2: Upload Savestate -->
-    <section id="step-savestate" class="step locked">
-      <div class="step-header">
-        <span class="step-num">2</span>
-        <h2>Upload Savestate</h2>
-        <span class="step-status" id="savestate-status"></span>
-      </div>
-      <div class="step-body">
-        <p class="hint">Dolphin savestate (.s01/.sav) — must be created with <strong>Dolphin 2603a</strong> (the build bundled in this container). Savestates are not portable across Dolphin versions.</p>
-        <input type="file" id="savestate-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" />
-        <button id="savestate-upload-btn" onclick="uploadSavestate()">Upload</button>
-      </div>
-    </section>
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- VIEW: Project detail                                           -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-project" class="view">
+      <div class="project-info" id="project-info"></div>
 
-    <!-- Step 3: Screenshot / Reference Frame -->
-    <section id="step-screenshot" class="step locked">
-      <div class="step-header">
-        <span class="step-num">3</span>
-        <h2>Reference Frame</h2>
-        <span class="step-status" id="screenshot-status"></span>
+      <div class="section-header">
+        <h2>Tasks</h2>
+        <button onclick="createTask()">+ New HUD Detection Task</button>
       </div>
-      <div class="step-body">
-        <div class="btn-group">
-          <button onclick="captureFrame()" id="capture-btn">Capture from Savestate</button>
-          <span class="or">or</span>
-          <input type="file" id="screenshot-input" accept="image/*" />
-          <button onclick="uploadScreenshot()">Upload Screenshot</button>
+
+      <ul class="task-list" id="task-list"></ul>
+      <div id="no-tasks" class="empty-state" hidden>
+        No tasks yet. Create one to start analyzing.
+      </div>
+
+      <div id="project-survey-status" class="info-box" hidden></div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <!-- VIEW: Task wizard                                              -->
+    <!-- ═══════════════════════════════════════════════════════════════ -->
+    <div id="view-task" class="view">
+
+      <!-- Step 1: Upload Savestate -->
+      <section id="step-savestate" class="step active">
+        <div class="step-header">
+          <span class="step-num">01</span>
+          <h2>Upload Savestate</h2>
+          <span class="step-status" id="savestate-status"></span>
         </div>
-        <div id="capture-spinner" class="spinner" hidden>Booting Dolphin and capturing frame...</div>
-      </div>
-    </section>
-
-    <!-- Step 4: Mask Painter -->
-    <section id="step-mask" class="step locked">
-      <div class="step-header">
-        <span class="step-num">4</span>
-        <h2>Paint HUD Mask</h2>
-        <span class="step-status" id="mask-status"></span>
-      </div>
-      <div class="step-body">
-        <p class="hint">Paint over HUD elements in <strong>white</strong>. Everything else stays black (preserved).</p>
-        <div class="mask-toolbar">
-          <button id="brush-btn" class="tool-btn active" onclick="setTool('brush')">Brush</button>
-          <button id="eraser-btn" class="tool-btn" onclick="setTool('eraser')">Eraser</button>
-          <label>Size: <input type="range" id="brush-size" min="4" max="80" value="20" oninput="updateBrushSize(this.value)"> <span id="brush-size-label">20</span>px</label>
-          <button onclick="maskUndo()">Undo</button>
-          <button onclick="maskRedo()">Redo</button>
-          <button onclick="maskClear()">Clear</button>
-          <span class="spacer"></span>
-          <label>Zoom: </label>
-          <button onclick="setZoom(1)" class="zoom-btn active" data-zoom="1">1x</button>
-          <button onclick="setZoom(2)" class="zoom-btn" data-zoom="2">2x</button>
-          <button onclick="setZoom(4)" class="zoom-btn" data-zoom="4">4x</button>
+        <div class="step-body">
+          <p class="hint">Dolphin savestate (.s01/.sav) &mdash; must be created with <strong>Dolphin 2603a</strong>. Savestates are not portable across Dolphin versions.</p>
+          <input type="file" id="savestate-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" />
+          <button id="savestate-upload-btn" onclick="uploadSavestate()">Upload</button>
         </div>
-        <div id="canvas-container">
-          <canvas id="mask-canvas" width="640" height="480"></canvas>
-        </div>
-        <button id="submit-mask-btn" onclick="submitMask()">Submit Mask</button>
-      </div>
-    </section>
+      </section>
 
-    <!-- Step 5: Run Agent -->
-    <section id="step-run" class="step locked">
-      <div class="step-header">
-        <span class="step-num">5</span>
-        <h2>Run Agent</h2>
-        <span class="step-status" id="run-status"></span>
-      </div>
-      <div class="step-body">
-        <div class="config-panel">
-          <label>Hint: <textarea id="hint-input" rows="2">Remove all HUD elements marked in the mask.</textarea></label>
-          <p class="hint">Task description given to the agent. Can include game-specific context.</p>
-          <div class="config-row">
-            <label>Budget: <input type="number" id="budget-input" value="8" min="1" max="20">
-              <span class="field-hint">Max Dolphin test runs the agent can use</span>
-            </label>
-            <label>Run seconds: <input type="number" id="run-seconds-input" value="10" min="5" max="60">
-              <span class="field-hint">Dolphin runtime per test (seconds)</span>
-            </label>
+      <!-- Step 2: Reference Frame -->
+      <section id="step-screenshot" class="step locked">
+        <div class="step-header">
+          <span class="step-num">02</span>
+          <h2>Reference Frame</h2>
+          <span class="step-status" id="screenshot-status"></span>
+        </div>
+        <div class="step-body">
+          <div class="btn-group">
+            <button onclick="captureFrame()" id="capture-btn">Capture from Savestate</button>
+            <span class="or">or</span>
+            <input type="file" id="screenshot-input" accept="image/*" />
+            <button onclick="uploadScreenshot()">Upload Screenshot</button>
+          </div>
+          <div id="capture-spinner" class="spinner" hidden>booting dolphin...</div>
+        </div>
+      </section>
+
+      <!-- Step 3: Mask Painter -->
+      <section id="step-mask" class="step locked">
+        <div class="step-header">
+          <span class="step-num">03</span>
+          <h2>Paint HUD Mask</h2>
+          <span class="step-status" id="mask-status"></span>
+        </div>
+        <div class="step-body">
+          <p class="hint">Paint over HUD elements in <strong>white</strong>. Everything else stays black (preserved).</p>
+          <div class="mask-toolbar">
+            <button id="brush-btn" class="tool-btn active" onclick="setTool('brush')">Brush</button>
+            <button id="eraser-btn" class="tool-btn" onclick="setTool('eraser')">Eraser</button>
+            <label>Size: <input type="range" id="brush-size" min="4" max="80" value="20" oninput="updateBrushSize(this.value)"> <span id="brush-size-label">20</span>px</label>
+            <button onclick="maskUndo()">Undo</button>
+            <button onclick="maskRedo()">Redo</button>
+            <button onclick="maskClear()">Clear</button>
+            <span class="spacer"></span>
+            <label>Zoom: </label>
+            <button onclick="setZoom(1)" class="zoom-btn active" data-zoom="1">1x</button>
+            <button onclick="setZoom(2)" class="zoom-btn" data-zoom="2">2x</button>
+            <button onclick="setZoom(4)" class="zoom-btn" data-zoom="4">4x</button>
+          </div>
+          <div id="canvas-container">
+            <canvas id="mask-canvas" width="640" height="480"></canvas>
+          </div>
+          <button id="submit-mask-btn" onclick="submitMask()">Submit Mask</button>
+        </div>
+      </section>
+
+      <!-- Step 4: Run Agent -->
+      <section id="step-run" class="step locked">
+        <div class="step-header">
+          <span class="step-num">04</span>
+          <h2>Run Agent</h2>
+          <span class="step-status" id="run-status"></span>
+        </div>
+        <div class="step-body">
+          <div class="config-panel">
+            <label>Hint: <textarea id="hint-input" rows="2">Remove all HUD elements marked in the mask.</textarea></label>
+            <p class="hint">Task description given to the agent. Can include game-specific context.</p>
+            <div class="config-row">
+              <label>Budget: <input type="number" id="budget-input" value="8" min="1" max="20">
+                <span class="field-hint">Max Dolphin test runs</span>
+              </label>
+              <label>Run seconds: <input type="number" id="run-seconds-input" value="10" min="5" max="60">
+                <span class="field-hint">Dolphin runtime per test</span>
+              </label>
+            </div>
+          </div>
+          <button id="run-btn" onclick="startRun()" class="primary">Start Agent Run</button>
+          <p class="hint" style="margin-top: 0.5rem;">
+            <a id="inspect-link-inline" href="#" target="_blank">Open Inspect AI Viewer</a> for detailed agent traces.
+          </p>
+          <div id="event-log" hidden>
+            <h3>Agent Log</h3>
+            <pre id="event-log-content"></pre>
           </div>
         </div>
-        <button id="run-btn" onclick="startRun()">Start Agent Run</button>
-        <p class="hint" style="margin-top: 0.5rem;">
-          For detailed agent traces, open the <a id="inspect-link-inline" href="#" target="_blank">Inspect AI Viewer</a>.
-        </p>
-        <div id="event-log" hidden>
-          <h3>Agent Log</h3>
-          <pre id="event-log-content"></pre>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Step 6: Results -->
-    <section id="step-results" class="step locked">
-      <div class="step-header">
-        <span class="step-num">6</span>
-        <h2>Results</h2>
-      </div>
-      <div class="step-body">
-        <div id="result-verdict" class="verdict"></div>
-        <div id="result-details"></div>
-        <pre id="result-gecko"></pre>
-        <div class="btn-group">
-          <button id="download-gecko-btn" onclick="downloadGecko()" hidden>Download Gecko Code</button>
-          <a id="inspect-link" href="/inspect" target="_blank" hidden>Open Inspect AI Viewer</a>
+      <!-- Step 5: Results -->
+      <section id="step-results" class="step locked">
+        <div class="step-header">
+          <span class="step-num">05</span>
+          <h2>Results</h2>
         </div>
-        <div id="result-frame-container" hidden>
-          <h3>Result Frame</h3>
-          <img id="result-frame" />
+        <div class="step-body">
+          <div id="result-verdict" class="verdict"></div>
+          <div id="result-details"></div>
+          <pre id="result-gecko"></pre>
+          <div class="btn-group">
+            <button id="download-gecko-btn" onclick="downloadGecko()" hidden>Download Gecko Code</button>
+            <a id="inspect-link" href="/inspect" target="_blank" hidden>Open Inspect AI Viewer</a>
+          </div>
+          <div id="result-frame-container" hidden>
+            <h3>Result Frame</h3>
+            <img id="result-frame" />
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   </main>
 
   <script src="/mask-painter.js"></script>
   <script>
-    // ── State ──────────────────────────────────────────────────────────── //
-    let sessionId = null;
+    // ── State ──────────────────────────────────────────────────────── //
+    let currentProjectId = null;
+    let currentTaskId = null;
     let eventSource = null;
+    let surveyComplete = false;
+    let maskSubmitted = false;
     const inspectUrl = 'http://' + window.location.hostname + ':7575';
 
-    // Set Inspect AI viewer links.
     document.querySelectorAll('#inspect-link-inline, #inspect-link').forEach(el => {
       el.href = inspectUrl;
     });
 
-    // ── Helpers ────────────────────────────────────────────────────────── //
+    // ── Router ─────────────────────────────────────────────────────── //
+
+    function router() {
+      const hash = location.hash || '#/';
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+
+      const projectMatch = hash.match(/^#\/project\/([a-f0-9]+)$/);
+      const taskMatch = hash.match(/^#\/project\/([a-f0-9]+)\/task\/([a-f0-9]+)$/);
+
+      if (taskMatch) {
+        currentProjectId = taskMatch[1];
+        currentTaskId = taskMatch[2];
+        document.getElementById('view-task').classList.add('active');
+        loadTask();
+      } else if (projectMatch) {
+        currentProjectId = projectMatch[1];
+        currentTaskId = null;
+        document.getElementById('view-project').classList.add('active');
+        loadProject();
+      } else {
+        currentProjectId = null;
+        currentTaskId = null;
+        document.getElementById('view-dashboard').classList.add('active');
+        loadDashboard();
+      }
+    }
+
+    window.addEventListener('hashchange', router);
+
+    // ── Helpers ─────────────────────────────────────────────────────── //
+
+    function setBreadcrumb(parts) {
+      const el = document.getElementById('breadcrumb');
+      el.innerHTML = parts.map((p, i) => {
+        if (i < parts.length - 1) {
+          return `<a href="${p.href}">${p.text}</a><span class="sep">/</span>`;
+        }
+        return `<span>${p.text}</span>`;
+      }).join('');
+    }
 
     function unlockStep(id) {
-      document.getElementById(id).classList.remove('locked');
-      document.getElementById(id).classList.add('active');
+      const el = document.getElementById(id);
+      el.classList.remove('locked');
+      el.classList.add('active');
     }
 
     function completeStep(id, text) {
@@ -175,10 +249,21 @@
       if (status && text) status.textContent = text;
     }
 
+    function resetSteps() {
+      document.querySelectorAll('#view-task .step').forEach(s => {
+        s.classList.remove('completed', 'active');
+        s.classList.add('locked');
+        const st = s.querySelector('.step-status');
+        if (st) st.textContent = '';
+      });
+      surveyComplete = false;
+      maskSubmitted = false;
+    }
+
     async function api(method, path, body, isFile) {
       const opts = { method };
       if (isFile) {
-        opts.body = body; // FormData
+        opts.body = body;
       } else if (body) {
         opts.headers = { 'Content-Type': 'application/json' };
         opts.body = JSON.stringify(body);
@@ -191,7 +276,69 @@
       return res.json();
     }
 
-    // ── Step 1: ISO Upload ────────────────────────────────────────────── //
+    function timeAgo(ts) {
+      const d = Date.now() / 1000 - ts;
+      if (d < 60) return 'just now';
+      if (d < 3600) return Math.floor(d / 60) + 'm ago';
+      if (d < 86400) return Math.floor(d / 3600) + 'h ago';
+      return Math.floor(d / 86400) + 'd ago';
+    }
+
+    // ── Dashboard ──────────────────────────────────────────────────── //
+
+    async function loadDashboard() {
+      setBreadcrumb([{ text: 'Projects', href: '#/' }]);
+
+      try {
+        const projects = await api('GET', '/api/projects');
+        const list = document.getElementById('project-list');
+        const empty = document.getElementById('no-projects');
+
+        if (!projects.length) {
+          list.innerHTML = '';
+          empty.hidden = false;
+          return;
+        }
+
+        empty.hidden = true;
+        list.innerHTML = projects.map(p => {
+          const survey = p.survey_complete
+            ? `<span class="status-tag ready">${p.survey_binaries_done} binaries</span>`
+            : `<span class="status-tag analyzing">analyzing...</span>`;
+          return `<li>
+            <span class="cursor" onclick="location.hash='#/project/${p.project_id}'">&gt;</span>
+            <span class="game-id" onclick="location.hash='#/project/${p.project_id}'">${p.game_id || '...'}</span>
+            <span class="meta" onclick="location.hash='#/project/${p.project_id}'">${p.iso_sha1 ? p.iso_sha1.slice(0, 8) : ''} &middot; ${timeAgo(p.created_at)}</span>
+            ${survey}
+            <button class="danger delete-btn" onclick="event.stopPropagation(); deleteProject('${p.project_id}')">x</button>
+          </li>`;
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load projects:', e);
+      }
+    }
+
+    async function deleteProject(pid) {
+      if (!confirm('Delete this project and all its tasks?')) return;
+      try {
+        await api('DELETE', `/api/projects/${pid}`);
+        loadDashboard();
+      } catch (e) {
+        alert('Delete failed: ' + e.message);
+      }
+    }
+
+    async function deleteTask(tid) {
+      if (!confirm('Delete this task?')) return;
+      try {
+        await api('DELETE', `/api/projects/${currentProjectId}/tasks/${tid}`);
+        loadProject();
+      } catch (e) {
+        alert('Delete failed: ' + e.message);
+      }
+    }
+
+    // ── ISO Upload (creates project) ───────────────────────────────── //
 
     function onISOPicked(input) {
       const label = document.getElementById('iso-filename');
@@ -209,9 +356,8 @@
 
       const file = input.files[0];
 
-      // Create session.
-      const { session_id } = await api('POST', '/api/session');
-      sessionId = session_id;
+      // Create project.
+      const { project_id } = await api('POST', '/api/projects');
 
       const form = new FormData();
       form.append('file', file);
@@ -225,24 +371,23 @@
       progressText.hidden = false;
 
       try {
-        const result = await new Promise((resolve, reject) => {
+        await new Promise((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', `/api/session/${sessionId}/upload/iso`);
+          xhr.open('POST', `/api/projects/${project_id}/upload/iso`);
 
-          let uploadDone = false;
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const pct = (e.loaded / e.total) * 100;
               progress.querySelector('.progress-fill').style.width = pct + '%';
               const mb = (e.loaded / 1e6).toFixed(0);
               const total = (e.total / 1e6).toFixed(0);
-              progressText.textContent = `Uploading: ${mb} / ${total} MB (${pct.toFixed(0)}%)`;
+              progressText.textContent = `uploading: ${mb} / ${total} MB (${pct.toFixed(0)}%)`;
             }
           };
           xhr.upload.onload = () => {
-            uploadDone = true;
             progress.querySelector('.progress-fill').style.width = '100%';
-            progressText.textContent = 'Upload complete. Validating and hashing ISO...';
+            progressText.textContent = 'hashing ISO (SHA-1)...';
+            progressText.classList.add('spinner');
           };
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
@@ -255,49 +400,100 @@
           xhr.send(form);
         });
 
-        progressText.hidden = true;
-
-        const info = document.getElementById('iso-info');
-        info.hidden = false;
-        info.innerHTML = `<strong>Game ID:</strong> ${result.game_id} &nbsp;|&nbsp; <strong>SHA-1:</strong> ${result.sha1.slice(0, 12)}... &nbsp;|&nbsp; <strong>Size:</strong> ${(result.size / 1e6).toFixed(0)} MB`;
-
-        completeStep('step-iso', result.game_id);
-        unlockStep('step-savestate');
-
-        // Start polling survey status (shown under ISO step).
-        pollSurvey();
+        // Navigate to the new project.
+        location.hash = `#/project/${project_id}`;
       } catch (e) {
         alert('ISO upload failed: ' + e.message);
-        progressText.textContent = 'Upload failed: ' + e.message;
+        progressText.textContent = 'upload failed';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Upload';
+        progress.hidden = true;
+        progressText.hidden = true;
+        progress.querySelector('.progress-fill').style.width = '0%';
+        input.value = '';
+        document.getElementById('iso-filename').textContent = '';
       }
     }
 
-    // ── Survey polling (shown under ISO step) ─────────────────────────── //
+    // ── Project detail ─────────────────────────────────────────────── //
 
-    let surveyComplete = false;
+    async function loadProject() {
+      setBreadcrumb([
+        { text: 'Projects', href: '#/' },
+        { text: '...', href: `#/project/${currentProjectId}` },
+      ]);
 
-    async function pollSurvey() {
-      const surveyEl = document.getElementById('survey-status');
+      try {
+        const p = await api('GET', `/api/projects/${currentProjectId}`);
+
+        setBreadcrumb([
+          { text: 'Projects', href: '#/' },
+          { text: p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
+        ]);
+
+        const info = document.getElementById('project-info');
+        const surveyText = p.survey_complete
+          ? `<span class="value green">${p.survey_binaries_done} binaries analyzed</span>`
+          : `<span class="value" style="color:var(--amber)">${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'} binaries...</span>`;
+
+        info.innerHTML = `
+          <div class="row"><span class="label">Game ID</span><span class="value green">${p.game_id}</span></div>
+          <div class="row"><span class="label">ISO SHA-1</span><span class="value">${p.iso_sha1 ? p.iso_sha1.slice(0, 16) + '...' : 'n/a'}</span></div>
+          <div class="row"><span class="label">Size</span><span class="value">${p.iso_size ? (p.iso_size / 1e6).toFixed(0) + ' MB' : 'n/a'}</span></div>
+          <div class="row"><span class="label">Survey</span>${surveyText}</div>
+        `;
+
+        // Poll survey if not complete.
+        if (!p.survey_complete) {
+          pollProjectSurvey();
+        }
+
+        // Load tasks.
+        const tasks = await api('GET', `/api/projects/${currentProjectId}/tasks`);
+        const list = document.getElementById('task-list');
+        const empty = document.getElementById('no-tasks');
+
+        if (!tasks.length) {
+          list.innerHTML = '';
+          empty.hidden = false;
+          return;
+        }
+
+        empty.hidden = true;
+        list.innerHTML = tasks.map(t => {
+          let verdict = '';
+          if (t.result_verdict === 'PASS') verdict = '<span class="verdict-pass">PASS</span>';
+          else if (t.result_verdict === 'FAIL') verdict = '<span class="verdict-fail">FAIL</span>';
+          return `<li>
+            <span class="cursor" onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">&gt;</span>
+            <span class="task-type" onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">${t.task_type}</span>
+            <span class="task-state" onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">${t.state}</span>
+            ${verdict}
+            <button class="danger delete-btn" onclick="event.stopPropagation(); deleteTask('${t.task_id}')">x</button>
+          </li>`;
+        }).join('');
+      } catch (e) {
+        console.error('Failed to load project:', e);
+      }
+    }
+
+    async function pollProjectSurvey() {
+      const surveyEl = document.getElementById('project-survey-status');
       surveyEl.hidden = false;
-      surveyEl.textContent = 'Ghidra binary analysis starting...';
+      surveyEl.textContent = 'ghidra binary analysis running...';
 
       const poll = async () => {
-        if (!sessionId) return;
+        if (!currentProjectId) return;
         try {
-          const status = await api('GET', `/api/session/${sessionId}/status`);
-          if (status.survey_complete) {
-            surveyComplete = true;
-            surveyEl.textContent = `Analysis complete: ${status.survey_binaries_done} binaries analyzed`;
+          const p = await api('GET', `/api/projects/${currentProjectId}`);
+          if (p.survey_complete) {
+            surveyEl.textContent = `analysis complete: ${p.survey_binaries_done} binaries`;
             surveyEl.classList.add('success');
-            checkReady();
+            // Refresh project view to update info box.
+            loadProject();
             return;
           }
-          const done = status.survey_binaries_done || 0;
-          const total = status.survey_binaries_total || '?';
-          surveyEl.textContent = `Analyzing binaries with Ghidra... (${done}/${total})`;
+          surveyEl.textContent = `analyzing binaries... (${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'})`;
           setTimeout(poll, 2000);
         } catch {
           setTimeout(poll, 3000);
@@ -306,16 +502,91 @@
       poll();
     }
 
-    let maskSubmitted = false;
-
-    function checkReady() {
-      // Run step unlocks when both survey is done AND mask is submitted.
-      if (surveyComplete && maskSubmitted) {
-        unlockStep('step-run');
+    async function createTask() {
+      try {
+        const { task_id } = await api('POST', `/api/projects/${currentProjectId}/tasks`, { type: 'hud_detection' });
+        location.hash = `#/project/${currentProjectId}/task/${task_id}`;
+      } catch (e) {
+        alert('Failed to create task: ' + e.message);
       }
     }
 
-    // ── Step 2: Savestate Upload ──────────────────────────────────────── //
+    // ── Task wizard ────────────────────────────────────────────────── //
+
+    async function loadTask() {
+      resetSteps();
+
+      setBreadcrumb([
+        { text: 'Projects', href: '#/' },
+        { text: '...', href: `#/project/${currentProjectId}` },
+        { text: 'task ' + currentTaskId, href: `#/project/${currentProjectId}/task/${currentTaskId}` },
+      ]);
+
+      try {
+        // Load project info for breadcrumb.
+        const p = await api('GET', `/api/projects/${currentProjectId}`);
+        setBreadcrumb([
+          { text: 'Projects', href: '#/' },
+          { text: p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
+          { text: 'task ' + currentTaskId, href: `#/project/${currentProjectId}/task/${currentTaskId}` },
+        ]);
+
+        const t = await api('GET', `/api/projects/${currentProjectId}/tasks/${currentTaskId}`);
+        surveyComplete = t.survey_complete || false;
+
+        // Restore wizard state based on task state.
+        const state = t.state;
+
+        // Step 1: savestate is always unlocked.
+        unlockStep('step-savestate');
+
+        if (state === 'created') {
+          // Nothing uploaded yet.
+          return;
+        }
+
+        // Savestate was uploaded.
+        completeStep('step-savestate', 'uploaded');
+        unlockStep('step-screenshot');
+
+        if (state === 'savestate_uploaded') return;
+
+        // Frame is ready.
+        completeStep('step-screenshot', 'captured');
+        unlockStep('step-mask');
+        initMaskPainter(`/api/projects/${currentProjectId}/tasks/${currentTaskId}/files/reference.png`);
+
+        if (state === 'frame_ready') return;
+
+        // Mask submitted.
+        completeStep('step-mask', 'submitted');
+        maskSubmitted = true;
+
+        if (state === 'mask_ready') {
+          if (surveyComplete) unlockStep('step-run');
+          return;
+        }
+
+        // Ready or later.
+        if (state === 'ready' || state === 'running' || state === 'done' || state === 'failed') {
+          unlockStep('step-run');
+        }
+
+        if (state === 'done' || state === 'failed') {
+          completeStep('step-run', state);
+          loadResults();
+        }
+
+      } catch (e) {
+        console.error('Failed to load task:', e);
+      }
+    }
+
+    // ── Task step handlers ─────────────────────────────────────────── //
+
+    function taskPath() {
+      return `/api/projects/${currentProjectId}/tasks/${currentTaskId}`;
+    }
 
     async function uploadSavestate() {
       const input = document.getElementById('savestate-input');
@@ -325,15 +596,13 @@
       form.append('file', input.files[0]);
 
       try {
-        await api('POST', `/api/session/${sessionId}/upload/savestate`, form, true);
+        await api('POST', `${taskPath()}/upload/savestate`, form, true);
         completeStep('step-savestate', 'uploaded');
         unlockStep('step-screenshot');
       } catch (e) {
         alert('Savestate upload failed: ' + e.message);
       }
     }
-
-    // ── Step 3: Reference Frame ───────────────────────────────────────── //
 
     async function captureFrame() {
       const btn = document.getElementById('capture-btn');
@@ -342,7 +611,7 @@
       spinner.hidden = false;
 
       try {
-        const result = await api('POST', `/api/session/${sessionId}/capture`);
+        const result = await api('POST', `${taskPath()}/capture`);
         completeStep('step-screenshot', 'captured');
         unlockStep('step-mask');
         initMaskPainter(result.frame_url);
@@ -362,16 +631,14 @@
       form.append('file', input.files[0]);
 
       try {
-        await api('POST', `/api/session/${sessionId}/upload/screenshot`, form, true);
+        await api('POST', `${taskPath()}/upload/screenshot`, form, true);
         completeStep('step-screenshot', 'uploaded');
         unlockStep('step-mask');
-        initMaskPainter(`/api/session/${sessionId}/files/reference.png`);
+        initMaskPainter(`${taskPath()}/files/reference.png`);
       } catch (e) {
         alert('Screenshot upload failed: ' + e.message);
       }
     }
-
-    // ── Step 4: Mask ──────────────────────────────────────────────────── //
 
     async function submitMask() {
       const maskBlob = await exportMask();
@@ -379,26 +646,39 @@
       form.append('file', maskBlob, 'mask.png');
 
       try {
-        const result = await api('POST', `/api/session/${sessionId}/mask`, form, true);
+        const result = await api('POST', `${taskPath()}/mask`, form, true);
         completeStep('step-mask', `${result.coverage_pct}% coverage`);
         maskSubmitted = true;
-        if (surveyComplete) {
-          unlockStep('step-run');
-        } else {
-          // Show a note that we're waiting for survey.
-          document.getElementById('mask-status').textContent = 'Waiting for Ghidra analysis to finish...';
-        }
         checkReady();
       } catch (e) {
         alert('Mask submit failed: ' + e.message);
       }
     }
 
-    // ── Step 5: Run Agent ─────────────────────────────────────────────── //
+    function checkReady() {
+      if (surveyComplete && maskSubmitted) {
+        unlockStep('step-run');
+      } else if (maskSubmitted && !surveyComplete) {
+        document.getElementById('mask-status').textContent = 'waiting for ghidra...';
+        // Poll for survey completion.
+        const poll = async () => {
+          try {
+            const p = await api('GET', `/api/projects/${currentProjectId}`);
+            if (p.survey_complete) {
+              surveyComplete = true;
+              document.getElementById('mask-status').textContent = '';
+              unlockStep('step-run');
+              return;
+            }
+            setTimeout(poll, 2000);
+          } catch { setTimeout(poll, 3000); }
+        };
+        poll();
+      }
+    }
 
     async function startRun() {
-      // Send config first.
-      await api('POST', `/api/session/${sessionId}/config`, {
+      await api('POST', `${taskPath()}/config`, {
         hint: document.getElementById('hint-input').value,
         verify_budget: parseInt(document.getElementById('budget-input').value),
         run_seconds: parseInt(document.getElementById('run-seconds-input').value),
@@ -406,7 +686,7 @@
 
       const btn = document.getElementById('run-btn');
       btn.disabled = true;
-      btn.textContent = 'Running...';
+      btn.textContent = 'running...';
 
       const logEl = document.getElementById('event-log');
       const logContent = document.getElementById('event-log-content');
@@ -414,7 +694,7 @@
       logContent.textContent = '';
 
       try {
-        await api('POST', `/api/session/${sessionId}/run`);
+        await api('POST', `${taskPath()}/run`);
       } catch (e) {
         alert('Failed to start run: ' + e.message);
         btn.disabled = false;
@@ -422,18 +702,15 @@
         return;
       }
 
-      // Connect SSE.
-      eventSource = new EventSource(`/api/session/${sessionId}/events`);
+      eventSource = new EventSource(`${taskPath()}/events`);
       eventSource.onmessage = (e) => {
         const data = JSON.parse(e.data);
-
         if (data.t === 'heartbeat') return;
 
-        // Format event for display.
         let line = '';
-        if (data.t === 'survey_start') line = '[survey] Starting binary analysis...';
-        else if (data.t === 'survey_done') line = `[survey] Complete: ${data.binaries} binaries`;
-        else if (data.t === 'agent_start') line = '[agent] Agent started';
+        if (data.t === 'survey_start') line = '[survey] starting binary analysis...';
+        else if (data.t === 'survey_done') line = `[survey] complete: ${data.binaries} binaries`;
+        else if (data.t === 'agent_start') line = '[agent] started';
         else if (data.t === 'tool_call') line = `[tool] ${data.fn}(${JSON.stringify(data.args || {}).slice(0, 80)})`;
         else if (data.t === 'agent_done') line = `[result] ${data.verdict}`;
         else if (data.t === 'agent_error') line = `[error] ${data.error}`;
@@ -451,10 +728,9 @@
       };
 
       eventSource.onerror = () => {
-        // Reconnection is automatic with EventSource, but check if done.
         setTimeout(async () => {
           try {
-            const status = await api('GET', `/api/session/${sessionId}/status`);
+            const status = await api('GET', `${taskPath()}`);
             if (status.state === 'done' || status.state === 'failed') {
               eventSource.close();
               btn.disabled = false;
@@ -466,11 +742,11 @@
       };
     }
 
-    // ── Step 6: Results ───────────────────────────────────────────────── //
+    // ── Results ────────────────────────────────────────────────────── //
 
     async function loadResults() {
       try {
-        const result = await api('GET', `/api/session/${sessionId}/result`);
+        const result = await api('GET', `${taskPath()}/result`);
         unlockStep('step-results');
 
         const verdict = document.getElementById('result-verdict');
@@ -484,12 +760,12 @@
         }
 
         document.getElementById('inspect-link').hidden = false;
-        document.getElementById('inspect-link').href = 'http://' + window.location.hostname + ':7575';
+        document.getElementById('inspect-link').href = inspectUrl;
 
         if (result.has_frame) {
           const fc = document.getElementById('result-frame-container');
           fc.hidden = false;
-          document.getElementById('result-frame').src = `/api/session/${sessionId}/files/result_frame.png`;
+          document.getElementById('result-frame').src = `${taskPath()}/files/result_frame.png`;
         }
       } catch (e) {
         console.error('Failed to load results:', e);
@@ -497,8 +773,11 @@
     }
 
     function downloadGecko() {
-      window.open(`/api/session/${sessionId}/result.gecko`, '_blank');
+      window.open(`${taskPath()}/result.gecko`, '_blank');
     }
+
+    // ── Init ───────────────────────────────────────────────────────── //
+    router();
   </script>
 </body>
 </html>

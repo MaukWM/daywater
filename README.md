@@ -184,4 +184,3 @@ uv run ruff check src/ tests/
 - Linux headless mode uses `dolphin-emu-nogui --platform=headless` (no X needed).
 - Docker containers need `docker run --shm-size=2g` (Dolphin MemArena
   exceeds the default 64 MB `/dev/shm`).
-

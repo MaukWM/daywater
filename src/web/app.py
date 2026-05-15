@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import shutil
 import tempfile
 from pathlib import Path
@@ -14,10 +13,10 @@ from fastapi.staticfiles import StaticFiles
 
 from src.web.events import stream_events
 from src.web.mask import save_mask
-from src.web.sessions import SessionState, SessionStore
+from src.web.sessions import ProjectStore, TaskState
 from src.web.uploads import save_iso, save_reference_frame, save_savestate, save_screenshot
 
-app = FastAPI(title="Spectre", version="0.1.0")
+app = FastAPI(title="Spectre", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -26,56 +25,72 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Session store — configurable root for dev vs Docker.
-_sessions_root = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
-store = SessionStore(_sessions_root)
+# Project store — configurable root for dev vs Docker.
+_projects_root = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
+store = ProjectStore(_projects_root)
 
 
-def _get_session(session_id: str):  # type: ignore[no-untyped-def]
-    session = store.get(session_id)
-    if session is None:
-        raise HTTPException(404, f"Session {session_id} not found")
-    return session
+def _get_project(project_id: str):  # type: ignore[no-untyped-def]
+    project = store.get(project_id)
+    if project is None:
+        raise HTTPException(404, f"Project {project_id} not found")
+    return project
 
 
-# ── Session CRUD ──────────────────────────────────────────────────────── #
+def _get_task(project_id: str, task_id: str):  # type: ignore[no-untyped-def]
+    project = _get_project(project_id)
+    task = project.get_task(task_id)
+    if task is None:
+        raise HTTPException(404, f"Task {task_id} not found in project {project_id}")
+    return project, task
 
 
-@app.post("/api/session")
-async def create_session() -> dict[str, str]:
-    session = store.create()
-    return {"session_id": session.session_id}
+# ── Project CRUD ─────────────────────────────────────────────────────── #
 
 
-@app.get("/api/session/{session_id}/status")
-async def get_status(session_id: str) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    return session.status_dict()
+@app.post("/api/projects")
+async def create_project() -> dict[str, str]:
+    project = store.create()
+    return {"project_id": project.project_id}
 
 
-@app.get("/api/sessions")
-async def list_sessions() -> list[dict]:  # type: ignore[type-arg]
+@app.get("/api/projects")
+async def list_projects() -> list[dict]:  # type: ignore[type-arg]
     return [
-        {"session_id": s.session_id, "state": s.state, "game_id": s.game_id, "created_at": s.created_at}
-        for s in store.list_sessions()
+        {
+            "project_id": p.project_id,
+            "game_id": p.game_id,
+            "iso_sha1": p.iso_sha1,
+            "iso_size": p.iso_size,
+            "survey_complete": p.survey_complete,
+            "survey_binaries_done": p.survey_binaries_done,
+            "created_at": p.created_at,
+        }
+        for p in store.list_projects()
     ]
 
 
-@app.delete("/api/session/{session_id}")
-async def delete_session(session_id: str) -> dict[str, bool]:
-    session = _get_session(session_id)
-    shutil.rmtree(session.root, ignore_errors=True)
+@app.get("/api/projects/{project_id}")
+async def get_project(project_id: str) -> dict:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    return project.status_dict()
+
+
+@app.delete("/api/projects/{project_id}")
+async def delete_project(project_id: str) -> dict[str, bool]:
+    project = _get_project(project_id)
+    shutil.rmtree(project.root, ignore_errors=True)
     return {"ok": True}
 
 
-# ── File uploads ──────────────────────────────────────────────────────── #
+# ── ISO Upload (project level) ──────────────────────────────────────── #
 
 
-@app.post("/api/session/{session_id}/upload/iso")
-async def upload_iso(session_id: str, file: UploadFile, background_tasks: BackgroundTasks) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state not in (SessionState.CREATED,):
-        raise HTTPException(400, f"Cannot upload ISO in state {session.state}")
+@app.post("/api/projects/{project_id}/upload/iso")
+async def upload_iso(project_id: str, file: UploadFile, background_tasks: BackgroundTasks) -> dict:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    if project.config.game_id:
+        raise HTTPException(400, "ISO already uploaded for this project")
 
     # Stream upload to temp file.
     tmp = Path(tempfile.mktemp(suffix=".iso", prefix="spectre_upload_"))
@@ -86,7 +101,7 @@ async def upload_iso(session_id: str, file: UploadFile, background_tasks: Backgr
             size += len(chunk)
 
     try:
-        result = save_iso(session, tmp, size)
+        result = save_iso(project, tmp, size)
     except ValueError as e:
         tmp.unlink(missing_ok=True)
         raise HTTPException(400, str(e))
@@ -95,9 +110,9 @@ async def upload_iso(session_id: str, file: UploadFile, background_tasks: Backgr
     from src.web.runner import run_survey
 
     async def _survey() -> None:
-        s = _get_session(session_id)
+        p = _get_project(project_id)
         try:
-            await run_survey(s)
+            await run_survey(p)
         except Exception:
             pass  # logged inside run_survey
 
@@ -106,11 +121,69 @@ async def upload_iso(session_id: str, file: UploadFile, background_tasks: Backgr
     return result
 
 
-@app.post("/api/session/{session_id}/upload/savestate")
-async def upload_savestate(session_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state != SessionState.ISO_UPLOADED:
-        raise HTTPException(400, f"Cannot upload savestate in state {session.state}")
+@app.get("/api/projects/{project_id}/events")
+async def project_event_stream(project_id: str) -> StreamingResponse:
+    project = _get_project(project_id)
+    return StreamingResponse(
+        stream_events(project),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Task CRUD ────────────────────────────────────────────────────────── #
+
+
+@app.post("/api/projects/{project_id}/tasks")
+async def create_task(project_id: str, body: dict | None = None) -> dict[str, str]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    if not project.config.game_id:
+        raise HTTPException(400, "Upload an ISO first")
+    task_type = (body or {}).get("type", "hud_detection")
+    task = project.create_task(task_type=task_type)
+    return {"task_id": task.task_id, "task_type": task_type}
+
+
+@app.get("/api/projects/{project_id}/tasks")
+async def list_tasks(project_id: str) -> list[dict]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    return [
+        {
+            "task_id": t.task_id,
+            "task_type": t.task_type,
+            "state": t.state,
+            "result_verdict": t.result_verdict,
+            "created_at": t.created_at,
+        }
+        for t in project.list_tasks()
+    ]
+
+
+@app.delete("/api/projects/{project_id}/tasks/{task_id}")
+async def delete_task(project_id: str, task_id: str) -> dict[str, bool]:
+    project, task = _get_task(project_id, task_id)
+    shutil.rmtree(task.root, ignore_errors=True)
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/tasks/{task_id}")
+async def get_task_status(project_id: str, task_id: str) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    d = task.status_dict()
+    d["survey_complete"] = project.config.survey_complete
+    d["survey_binaries_done"] = project.config.survey_binaries_done
+    d["survey_binaries_total"] = project.config.survey_binaries_total
+    return d
+
+
+# ── Task file uploads ────────────────────────────────────────────────── #
+
+
+@app.post("/api/projects/{project_id}/tasks/{task_id}/upload/savestate")
+async def upload_savestate(project_id: str, task_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    if task.state != TaskState.CREATED:
+        raise HTTPException(400, f"Cannot upload savestate in state {task.state}")
 
     tmp = Path(tempfile.mktemp(suffix=".sav", prefix="spectre_upload_"))
     size = 0
@@ -120,18 +193,18 @@ async def upload_savestate(session_id: str, file: UploadFile) -> dict:  # type: 
             size += len(chunk)
 
     try:
-        result = save_savestate(session, tmp, size)
+        result = save_savestate(task, tmp, size)
     except ValueError as e:
         tmp.unlink(missing_ok=True)
         raise HTTPException(400, str(e))
     return result
 
 
-@app.post("/api/session/{session_id}/upload/screenshot")
-async def upload_screenshot(session_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state != SessionState.SAVESTATE_UPLOADED:
-        raise HTTPException(400, f"Cannot upload screenshot in state {session.state}")
+@app.post("/api/projects/{project_id}/tasks/{task_id}/upload/screenshot")
+async def upload_screenshot(project_id: str, task_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    if task.state not in (TaskState.SAVESTATE_UPLOADED, TaskState.FRAME_READY, TaskState.MASK_READY):
+        raise HTTPException(400, f"Cannot upload screenshot in state {task.state}")
 
     tmp = Path(tempfile.mktemp(suffix=".png", prefix="spectre_upload_"))
     size = 0
@@ -141,154 +214,154 @@ async def upload_screenshot(session_id: str, file: UploadFile) -> dict:  # type:
             size += len(chunk)
 
     try:
-        result = save_screenshot(session, tmp, size)
+        result = save_screenshot(task, tmp, size)
     except ValueError as e:
         tmp.unlink(missing_ok=True)
         raise HTTPException(400, str(e))
     return result
 
 
-# ── Capture frame from Dolphin ────────────────────────────────────────── #
+# ── Capture frame from Dolphin ───────────────────────────────────────── #
 
 
-@app.post("/api/session/{session_id}/capture")
-async def capture_frame(session_id: str) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state != SessionState.SAVESTATE_UPLOADED:
-        raise HTTPException(400, f"Cannot capture in state {session.state}")
+@app.post("/api/projects/{project_id}/tasks/{task_id}/capture")
+async def capture_frame(project_id: str, task_id: str) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    # Allow capture from multiple states (fixes re-capture bug).
+    if task.state not in (TaskState.SAVESTATE_UPLOADED, TaskState.FRAME_READY, TaskState.MASK_READY):
+        raise HTTPException(400, f"Cannot capture in state {task.state}")
 
     from src.web.runner import run_capture_frame
 
-    frame_path = await run_capture_frame(session)
-    save_reference_frame(session, frame_path)
-    return {"ok": True, "frame_url": f"/api/session/{session_id}/files/reference.png"}
+    frame_path = await run_capture_frame(task, project.iso_path)
+    save_reference_frame(task, frame_path)
+    return {"ok": True, "frame_url": f"/api/projects/{project_id}/tasks/{task_id}/files/reference.png"}
 
 
-# ── Mask ──────────────────────────────────────────────────────────────── #
+# ── Mask ─────────────────────────────────────────────────────────────── #
 
 
-@app.post("/api/session/{session_id}/mask")
-async def submit_mask(session_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state != SessionState.FRAME_READY:
-        raise HTTPException(400, f"Cannot submit mask in state {session.state}")
+@app.post("/api/projects/{project_id}/tasks/{task_id}/mask")
+async def submit_mask(project_id: str, task_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    if task.state != TaskState.FRAME_READY:
+        raise HTTPException(400, f"Cannot submit mask in state {task.state}")
 
     raw_bytes = await file.read()
     try:
-        result = save_mask(session, raw_bytes)
+        result = save_mask(task, raw_bytes)
     except ValueError as e:
         raise HTTPException(400, str(e))
 
     # Auto-transition to READY if survey is complete.
-    if session.config.survey_complete:
-        session.transition(SessionState.READY)
+    if project.config.survey_complete:
+        task.transition(TaskState.READY)
 
     return result
 
 
-# ── Config update ─────────────────────────────────────────────────────── #
+# ── Config update ────────────────────────────────────────────────────── #
 
 
-@app.post("/api/session/{session_id}/config")
-async def update_config(session_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
-    session = _get_session(session_id)
+@app.post("/api/projects/{project_id}/tasks/{task_id}/config")
+async def update_config(project_id: str, task_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
     for key in ("hint", "run_seconds", "verify_budget", "hud_min_mean", "preserve_max_mean"):
         if key in body:
-            setattr(session.config, key, body[key])
-    session.save()
+            setattr(task.config, key, body[key])
+    task.save()
     return {"ok": True}
 
 
-# ── Agent run ─────────────────────────────────────────────────────────── #
+# ── Agent run ────────────────────────────────────────────────────────── #
 
 
-@app.post("/api/session/{session_id}/run")
-async def start_run(session_id: str, background_tasks: BackgroundTasks) -> dict[str, bool]:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state != SessionState.READY:
-        raise HTTPException(400, f"Cannot start run in state {session.state}")
+@app.post("/api/projects/{project_id}/tasks/{task_id}/run")
+async def start_run(project_id: str, task_id: str, background_tasks: BackgroundTasks) -> dict[str, bool]:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    if task.state != TaskState.READY:
+        raise HTTPException(400, f"Cannot start run in state {task.state}")
 
     from src.web.runner import run_agent
 
     async def _run() -> None:
-        s = _get_session(session_id)
-        await run_agent(s)
+        p, t = _get_task(project_id, task_id)
+        await run_agent(t, p)
 
     background_tasks.add_task(_run)
     return {"ok": True}
 
 
-# ── SSE event stream ──────────────────────────────────────────────────── #
+# ── SSE event stream (task level) ────────────────────────────────────── #
 
 
-@app.get("/api/session/{session_id}/events")
-async def event_stream(session_id: str) -> StreamingResponse:
-    session = _get_session(session_id)
+@app.get("/api/projects/{project_id}/tasks/{task_id}/events")
+async def task_event_stream(project_id: str, task_id: str) -> StreamingResponse:
+    project, task = _get_task(project_id, task_id)
     return StreamingResponse(
-        stream_events(session),
+        stream_events(task),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-# ── Results ───────────────────────────────────────────────────────────── #
+# ── Results ──────────────────────────────────────────────────────────── #
 
 
-@app.get("/api/session/{session_id}/result")
-async def get_result(session_id: str) -> dict:  # type: ignore[type-arg]
-    session = _get_session(session_id)
-    if session.state not in (SessionState.DONE, SessionState.FAILED):
-        raise HTTPException(400, f"No result yet (state: {session.state})")
+@app.get("/api/projects/{project_id}/tasks/{task_id}/result")
+async def get_result(project_id: str, task_id: str) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    if task.state not in (TaskState.DONE, TaskState.FAILED):
+        raise HTTPException(400, f"No result yet (state: {task.state})")
     return {
-        "verdict": session.config.result_verdict,
-        "gecko": session.config.result_gecko,
-        "hud_mean": session.config.result_hud_mean,
-        "preserve_mean": session.config.result_preserve_mean,
-        "has_frame": session.result_frame_path.exists(),
+        "verdict": task.config.result_verdict,
+        "gecko": task.config.result_gecko,
+        "hud_mean": task.config.result_hud_mean,
+        "preserve_mean": task.config.result_preserve_mean,
+        "has_frame": task.result_frame_path.exists(),
     }
 
 
-@app.get("/api/session/{session_id}/result.gecko")
-async def download_gecko(session_id: str) -> FileResponse:
-    session = _get_session(session_id)
-    if not session.result_gecko_path.exists():
+@app.get("/api/projects/{project_id}/tasks/{task_id}/result.gecko")
+async def download_gecko(project_id: str, task_id: str) -> FileResponse:
+    project, task = _get_task(project_id, task_id)
+    if not task.result_gecko_path.exists():
         raise HTTPException(404, "No gecko code found")
+    game_id = project.config.game_id
     return FileResponse(
-        session.result_gecko_path,
+        task.result_gecko_path,
         media_type="text/plain",
-        filename=f"{session.config.game_id}_hud_off.gecko",
+        filename=f"{game_id}_hud_off.gecko",
     )
 
 
-# ── Serve session files (reference, mask, result frame) ───────────────── #
+# ── Serve task files (reference, mask, result frame) ─────────────────── #
 
 
-@app.get("/api/session/{session_id}/files/{filename}")
-async def get_session_file(session_id: str, filename: str) -> FileResponse:
-    session = _get_session(session_id)
-    # Whitelist serveable files.
+@app.get("/api/projects/{project_id}/tasks/{task_id}/files/{filename}")
+async def get_task_file(project_id: str, task_id: str, filename: str) -> FileResponse:
+    project, task = _get_task(project_id, task_id)
     allowed = {"reference.png", "mask.png", "result_frame.png", "config.json"}
     if filename not in allowed:
         raise HTTPException(403, f"File {filename} not serveable")
-    path = session.root / filename
+    path = task.root / filename
     if not path.exists():
         raise HTTPException(404, f"File {filename} not found")
     return FileResponse(path)
 
 
-# ── Static frontend ───────────────────────────────────────────────────── #
+# ── Static frontend ─────────────────────────────────────────────────── #
 
 _static_dir = Path(__file__).parent / "static"
 if _static_dir.exists():
     app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
 
 
-# ── Entry point ───────────────────────────────────────────────────────── #
+# ── Entry point ──────────────────────────────────────────────────────── #
 
 
 def main() -> None:
     import subprocess
-    import sys
 
     import uvicorn
 

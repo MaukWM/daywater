@@ -10,7 +10,7 @@ from PIL import Image
 
 from src.dolphin.runner import read_game_id
 from src.logging import logger
-from src.web.sessions import ISO_CACHE_ROOT, Session, SessionState
+from src.web.sessions import ISO_CACHE_ROOT, Project, Task, TaskState
 
 # Limits.
 MAX_ISO_SIZE = 1_600_000_000  # 1.5 GB
@@ -28,11 +28,11 @@ def _sha1_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def save_iso(session: Session, tmp_path: Path, size: int) -> dict[str, object]:
-    """Validate and persist an uploaded ISO. Returns metadata dict.
+def save_iso(project: Project, tmp_path: Path, size: int) -> dict[str, object]:
+    """Validate and persist an uploaded ISO to the project.
 
     The ISO is SHA-1 deduplicated: if the same ISO was uploaded in a prior
-    session, we symlink to the cached copy.
+    project, we symlink to the cached copy.
     """
     if size > MAX_ISO_SIZE:
         raise ValueError(f"ISO too large ({size:,} bytes, max {MAX_ISO_SIZE:,})")
@@ -53,30 +53,30 @@ def save_iso(session: Session, tmp_path: Path, size: int) -> dict[str, object]:
         tmp_path.unlink(missing_ok=True)
         logger.info("iso_cache_hit", sha1=sha1)
 
-    # Symlink from session dir.
-    session.iso_path.unlink(missing_ok=True)
-    session.iso_path.symlink_to(cached)
+    # Symlink from project dir.
+    project.iso_path.unlink(missing_ok=True)
+    project.iso_path.symlink_to(cached)
 
-    session.config.game_id = game_id
-    session.config.iso_sha1 = sha1
-    session.config.iso_size = size
-    session.transition(SessionState.ISO_UPLOADED)
+    project.config.game_id = game_id
+    project.config.iso_sha1 = sha1
+    project.config.iso_size = size
+    project.save()
 
     return {"sha1": sha1, "game_id": game_id, "size": size}
 
 
-def save_savestate(session: Session, tmp_path: Path, size: int) -> dict[str, object]:
-    """Validate and persist an uploaded savestate."""
+def save_savestate(task: Task, tmp_path: Path, size: int) -> dict[str, object]:
+    """Validate and persist an uploaded savestate to the task."""
     if size > MAX_SAVESTATE_SIZE:
         raise ValueError(f"Savestate too large ({size:,} bytes, max {MAX_SAVESTATE_SIZE:,})")
 
-    shutil.move(str(tmp_path), str(session.savestate_path))
-    session.transition(SessionState.SAVESTATE_UPLOADED)
+    shutil.move(str(tmp_path), str(task.savestate_path))
+    task.transition(TaskState.SAVESTATE_UPLOADED)
 
     return {"ok": True}
 
 
-def save_screenshot(session: Session, tmp_path: Path, size: int) -> dict[str, object]:
+def save_screenshot(task: Task, tmp_path: Path, size: int) -> dict[str, object]:
     """Validate and persist an uploaded screenshot as the reference frame."""
     if size > MAX_SCREENSHOT_SIZE:
         raise ValueError(f"Screenshot too large ({size:,} bytes, max {MAX_SCREENSHOT_SIZE:,})")
@@ -88,17 +88,17 @@ def save_screenshot(session: Session, tmp_path: Path, size: int) -> dict[str, ob
     if img.size != FRAME_SIZE:
         img = img.resize(FRAME_SIZE, Image.LANCZOS)
 
-    img.convert("RGB").save(session.reference_path, "PNG")
+    img.convert("RGB").save(task.reference_path, "PNG")
     tmp_path.unlink(missing_ok=True)
 
-    session.transition(SessionState.FRAME_READY)
+    task.transition(TaskState.FRAME_READY)
     return {"ok": True, "original_size": list(original_size), "normalized_to": list(FRAME_SIZE)}
 
 
-def save_reference_frame(session: Session, frame_path: Path) -> None:
-    """Copy a probe-captured frame as the session's reference image."""
+def save_reference_frame(task: Task, frame_path: Path) -> None:
+    """Copy a probe-captured frame as the task's reference image."""
     img = Image.open(frame_path)
     if img.size != FRAME_SIZE:
         img = img.resize(FRAME_SIZE, Image.LANCZOS)
-    img.convert("RGB").save(session.reference_path, "PNG")
-    session.transition(SessionState.FRAME_READY)
+    img.convert("RGB").save(task.reference_path, "PNG")
+    task.transition(TaskState.FRAME_READY)

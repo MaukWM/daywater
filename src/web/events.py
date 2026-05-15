@@ -1,28 +1,41 @@
-"""SSE event streaming from session event logs."""
+"""SSE event streaming from project/task event logs."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 from pathlib import Path
-from typing import AsyncGenerator
-
-from src.web.sessions import Session
+from typing import AsyncGenerator, Protocol
 
 
-async def stream_events(session: Session) -> AsyncGenerator[str, None]:
-    """Yield SSE-formatted events by tailing the session's events.jsonl.
+class Streamable(Protocol):
+    """Anything with events_path and config_path (Project or Task)."""
 
-    Starts from the beginning of the file and tails until the session
+    @property
+    def events_path(self) -> Path: ...
+
+    @property
+    def config_path(self) -> Path: ...
+
+
+async def stream_events(entity: Streamable) -> AsyncGenerator[str, None]:
+    """Yield SSE-formatted events by tailing an entity's events.jsonl.
+
+    Works with both Project (survey events) and Task (agent events).
+    Starts from the beginning of the file and tails until the entity
     reaches a terminal state (done/failed) or the client disconnects.
     """
-    events_path = session.events_path
+    events_path = entity.events_path
+    config_path = entity.config_path
     offset = 0
 
     while True:
-        # Re-read session state from disk to catch transitions.
-        config_text = session.config_path.read_text()
-        state = json.loads(config_text).get("state", "")
+        # Re-read state from disk to catch transitions.
+        try:
+            config_text = config_path.read_text()
+            state = json.loads(config_text).get("state", "")
+        except (FileNotFoundError, json.JSONDecodeError):
+            state = ""
 
         if events_path.exists():
             content = events_path.read_text()

@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import io
-from pathlib import Path
 
 import numpy as np
 from PIL import Image
 
-from src.web.sessions import Session, SessionState
+from src.web.sessions import Task, TaskState
 
 FRAME_SIZE = (640, 480)
 
@@ -43,7 +42,7 @@ def normalize_mask(raw_png_bytes: bytes) -> bytes:
     return buf.getvalue()
 
 
-def save_mask(session: Session, raw_png_bytes: bytes) -> dict[str, object]:
+def save_mask(task: Task, raw_png_bytes: bytes) -> dict[str, object]:
     """Normalize and persist a mask, return coverage stats."""
     mask_bytes = normalize_mask(raw_png_bytes)
 
@@ -62,7 +61,7 @@ def save_mask(session: Session, raw_png_bytes: bytes) -> dict[str, object]:
             f"Only paint over HUD elements, leave the rest of the scene unpainted."
         )
 
-    session.mask_path.write_bytes(mask_bytes)
+    task.mask_path.write_bytes(mask_bytes)
 
-    session.transition(SessionState.MASK_READY)
+    task.transition(TaskState.MASK_READY)
     return {"ok": True, "coverage_pct": coverage_pct, "hud_pixels": hud_pixels}

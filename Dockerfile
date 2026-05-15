@@ -55,29 +55,30 @@ ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 # Dolphin + other game binaries live in /usr/games on Debian/Ubuntu
 ENV PATH="/usr/games:$PATH"
 
+# --- Runtime user & directories ----------------------------------------- #
+# Create dirs and switch to UID 1000 BEFORE installing anything so all
+# files are owned correctly without a slow recursive chown.
+RUN mkdir -p /data/roms /app/cache /app/logs /app/sessions \
+    && chown -R 1000:1000 /app /data
+
+USER 1000
+
 # --- Python dependencies ------------------------------------------------ #
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 ENV UV_PYTHON=python3.13
 
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
+COPY --chown=1000:1000 pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # --- Application code --------------------------------------------------- #
-COPY src/ src/
-COPY samples/ samples/
-COPY cheats/ cheats/
+COPY --chown=1000:1000 src/ src/
+COPY --chown=1000:1000 samples/ samples/
+COPY --chown=1000:1000 cheats/ cheats/
 
 # --- Runtime config ------------------------------------------------------ #
 # Ghidra JVM memory (16 GB server, leave room for Dolphin)
 ENV _JAVA_OPTIONS="-Xmx4g"
-
-# Non-root user for runtime. Reuse ubuntu's UID 1000 (default in the base
-# image) so bind-mounted volumes are readable/writable on the host.
-RUN mkdir -p /data/roms /app/cache /app/logs /app/sessions \
-    && chown -R 1000:1000 /app /data
-
-USER 1000
 
 EXPOSE 7860 7575
 
