@@ -12,10 +12,19 @@ from pathlib import Path
 
 from inspect_ai.tool import Tool, tool
 
-from src.dolphin.input import InputSequence, PRESET_NAMES
+from src.dolphin.input import InputCommand, InputSequence
 from src.dolphin.memory import scan_floats_in_range
 from src.dolphin.session import DolphinSession
 from src.findings import FindingsStore
+
+# Valid GC buttons for the pipe protocol.
+GC_BUTTONS = frozenset({
+    "A", "B", "X", "Y", "Z", "START", "L", "R",
+    "D_UP", "D_DOWN", "D_LEFT", "D_RIGHT",
+})
+
+# Valid stick names.
+GC_STICKS = frozenset({"MAIN", "C"})
 
 
 # ── Memory reading tools ──────────────────────────────────────────────── #
@@ -247,42 +256,177 @@ def scan_memory_diff(session: DolphinSession) -> Tool:
     return execute
 
 
-# ── Input tool ────────────────────────────────────────────────────────── #
+# ── Input tools (raw GC controller) ───────────────────────────────────── #
 
 
 @tool
-def send_input(session: DolphinSession) -> Tool:
-    """Build a controller input tool bound to a DolphinSession."""
+def press_button(session: DolphinSession) -> Tool:
+    """Build a button press tool bound to a DolphinSession."""
 
-    async def execute(action: str, duration: float = 3.0) -> str:
-        """Send controller input to the running game.
-
-        Blocks for the duration of the input sequence. Use this to move the
-        player character and observe position changes in memory.
+    async def execute(button: str, duration: float = 0.3) -> str:
+        """Press a GameCube controller button for a duration, then release.
 
         Args:
-            action: Input preset name. One of: stand_still, walk_forward,
-                walk_backward, strafe_left, strafe_right, jump,
-                walk_forward_and_jump, look_up, look_down.
-            duration: How long to hold the input in seconds (default: 3.0).
-                Keep this short (2-5s) for position testing.
+            button: Button name. One of: A, B, X, Y, Z, START, L, R,
+                D_UP, D_DOWN, D_LEFT, D_RIGHT.
+            duration: How long to hold the button in seconds (default: 0.3).
         """
+        btn = button.upper().strip()
+        if btn not in GC_BUTTONS:
+            return f"Error: unknown button '{btn}'. Valid: {', '.join(sorted(GC_BUTTONS))}"
         if duration > 15.0:
             return "Error: duration capped at 15 seconds."
-        if duration < 0.5:
-            return "Error: duration must be at least 0.5 seconds."
+        if duration < 0.05:
+            return "Error: duration must be at least 0.05 seconds."
 
-        try:
-            seq = InputSequence.from_preset(action, duration)
-        except ValueError as e:
-            return str(e)
-
+        seq = InputSequence(commands=[
+            InputCommand(0.0, f"PRESS {btn}"),
+            InputCommand(duration, f"RELEASE {btn}"),
+        ])
         try:
             session.play_sequence(seq)
         except Exception as e:
-            return f"Error sending input: {e}"
+            return f"Error: {e}"
 
-        return f"Played '{action}' for {duration:.1f}s."
+        return f"Pressed {btn} for {duration:.2f}s."
+
+    return execute
+
+
+@tool
+def set_stick(session: DolphinSession) -> Tool:
+    """Build a stick position tool bound to a DolphinSession."""
+
+    async def execute(
+        stick: str = "MAIN",
+        x: float = 0.5,
+        y: float = 0.5,
+        duration: float = 3.0,
+    ) -> str:
+        """Hold a GameCube analog stick at a position, then return to neutral.
+
+        The stick axes range from 0.0 to 1.0, where 0.5 is neutral (center).
+
+        For the MAIN stick:
+          - x=0.0 is full left, x=1.0 is full right
+          - y=0.0 is full up/forward, y=1.0 is full down/backward
+
+        For the C stick (camera):
+          - Same axis mapping as MAIN
+
+        Args:
+            stick: "MAIN" for the main analog stick, "C" for the C-stick.
+            x: Horizontal position 0.0–1.0 (0.5 = neutral).
+            y: Vertical position 0.0–1.0 (0.5 = neutral).
+            duration: How long to hold this position in seconds (default: 3.0).
+        """
+        stick_name = stick.upper().strip()
+        if stick_name not in GC_STICKS:
+            return f"Error: unknown stick '{stick_name}'. Valid: MAIN, C"
+        if duration > 15.0:
+            return "Error: duration capped at 15 seconds."
+        if duration < 0.1:
+            return "Error: duration must be at least 0.1 seconds."
+        if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
+            return "Error: x and y must be in range 0.0–1.0."
+
+        seq = InputSequence(commands=[
+            InputCommand(0.0, f"SET {stick_name} {x:.3f} {y:.3f}"),
+            InputCommand(duration, f"SET {stick_name} 0.500 0.500"),
+        ])
+        try:
+            session.play_sequence(seq)
+        except Exception as e:
+            return f"Error: {e}"
+
+        return f"Held {stick_name} stick at ({x:.2f}, {y:.2f}) for {duration:.1f}s."
+
+    return execute
+
+
+@tool
+def wait(session: DolphinSession) -> Tool:
+    """Build a wait tool (let the game run with no input)."""
+
+    async def execute(duration: float = 2.0) -> str:
+        """Wait for a duration with no controller input. The game continues running.
+
+        Useful to let physics settle after movement, or to observe values at rest.
+
+        Args:
+            duration: How long to wait in seconds (default: 2.0).
+        """
+        if duration > 30.0:
+            return "Error: duration capped at 30 seconds."
+        if duration < 0.1:
+            return "Error: duration must be at least 0.1 seconds."
+
+        time.sleep(duration)
+        return f"Waited {duration:.1f}s."
+
+    return execute
+
+
+# ── Write watchpoint tool ─────────────────────────────────────────────── #
+
+
+@tool
+def find_writers(session: DolphinSession) -> Tool:
+    """Build a write-watchpoint tool bound to a DolphinSession."""
+
+    async def execute(address: str, duration: float = 3.0) -> str:
+        """Find all code locations that write to a GameCube memory address.
+
+        Sets a hardware write watchpoint via the GDB stub, lets the game run
+        for `duration` seconds, and collects every unique program counter (PC)
+        that writes to the address. Use this to trace which function is
+        responsible for updating a value (e.g. player position).
+
+        After getting the PCs, use `decompile(pc_address)` to see the code
+        that writes to this address. This is how you distinguish the
+        authoritative source (e.g. player_movement_update writing object+0x24)
+        from copies (camera sync, HUD cache, etc.).
+
+        Note: the game pauses briefly during watchpoint setup and on each hit.
+        Keep duration short (2-5s) to avoid excessive pauses.
+
+        Args:
+            address: Hex address to watch (e.g. "0x80B96E10").
+            duration: How long to monitor in seconds (default: 3.0).
+        """
+        try:
+            gc_addr = int(address, 16)
+        except ValueError:
+            return f"Error: invalid hex address '{address}'"
+
+        if duration > 15.0:
+            return "Error: duration capped at 15 seconds."
+
+        if session._gdb is None:
+            return "Error: GDB stub not available — session was not started with gdb_port."
+
+        try:
+            hits = session.find_writers(gc_addr, duration=duration)
+        except Exception as e:
+            return f"Error during watchpoint monitoring: {e}"
+
+        if not hits:
+            return (
+                f"No writes to 0x{gc_addr:08X} observed in {duration:.1f}s. "
+                f"Try sending input while monitoring (the address may only be "
+                f"written during movement)."
+            )
+
+        lines = [f"Found {len(hits)} code locations writing to 0x{gc_addr:08X}:"]
+        for hit in sorted(hits, key=lambda h: h.count, reverse=True):
+            lines.append(f"  PC=0x{hit.pc:08X}  hits={hit.count}")
+        lines.append("")
+        lines.append(
+            "Use decompile('0x...') on these PCs to see the writing code. "
+            "The authoritative position writer is typically in the player "
+            "movement/physics function, not a camera sync or HUD copy."
+        )
+        return "\n".join(lines)
 
     return execute
 

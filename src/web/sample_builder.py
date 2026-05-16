@@ -510,10 +510,16 @@ def _build_position_discovery_sample(task: Task, project: Project) -> Sample:
                 f"{ss_store.format_table()}\n"
             )
 
+    # Inject controller mapping
+    from src.web.controller_mapping import format_mapping_for_prompt, load_mapping
+
+    ctrl_mapping = load_mapping(project.root)
+    ctrl_block = f"\n## {format_mapping_for_prompt(ctrl_mapping)}\n"
+
     body = (
         f"Position discovery task: {tcfg.hint}\n\n"
         f"Game: {pcfg.game_id}\n"
-        f"{inv_block}{findings_block}{research_block}{ss_findings_block}"
+        f"{inv_block}{findings_block}{research_block}{ss_findings_block}{ctrl_block}"
     )
 
     return Sample(
@@ -530,7 +536,7 @@ def _build_position_discovery_sample(task: Task, project: Project) -> Sample:
 
 @scorer(metrics=[accuracy()])
 def position_discovery_scorer(savestate_root: Path, session_cleanup) -> Scorer:  # type: ignore[no-untyped-def]
-    """Score position discovery: check that X/Y/Z address findings were saved."""
+    """Score position discovery: check findings have addresses + code verification."""
 
     async def score(state: InspectTaskState, target: Target) -> Score:
         try:
@@ -543,14 +549,23 @@ def position_discovery_scorer(savestate_root: Path, session_cleanup) -> Scorer: 
                 for axis in ("player_x", "player_y", "player_z", "pos_x", "pos_y", "pos_z")
             )
 
+            # Check that findings include code verification (PC/function references)
+            code_verified = sum(
+                1 for f in addr_findings
+                if any(kw in f.detail.lower() for kw in ("pc=", "pc =", "written by", "0x80"))
+            )
+
             answer = state.output.completion or ""
             if len(addr_findings) >= 3 and has_position:
+                note = ""
+                if code_verified < 3:
+                    note = f" Warning: only {code_verified}/3 findings include code verification."
                 return Score(
                     value=CORRECT,
                     answer=answer[:200],
                     explanation=(
                         f"Found {len(addr_findings)} address findings. "
-                        f"Labels: {', '.join(f.label for f in addr_findings)}"
+                        f"Labels: {', '.join(f.label for f in addr_findings)}.{note}"
                     ),
                 )
             return Score(
@@ -578,14 +593,17 @@ def _build_position_discovery_task(
     """Build an Inspect AI Task for runtime position discovery."""
     from src.agent.prompts import POSITION_SYSTEM_PROMPT
     from src.agent.runtime_tools import (
+        find_writers,
         list_savestate_findings,
+        press_button,
         read_memory,
         read_memory_batch,
         sample_position,
         save_savestate_finding,
         scan_memory,
         scan_memory_diff,
-        send_input,
+        set_stick,
+        wait,
     )
     from src.dolphin.session import DolphinSession
 
@@ -601,6 +619,7 @@ def _build_position_discovery_task(
         iso=iso_path,
         savestate=ss.savestate_path,
         pipe_input=True,
+        gdb_port=6777,
     )
     session = session_cm.__enter__()
     session.wait_for_first_frame()
@@ -621,7 +640,10 @@ def _build_position_discovery_task(
                 read_memory_batch(session),
                 scan_memory(session),
                 scan_memory_diff(session),
-                send_input(session),
+                find_writers(session),
+                press_button(session),
+                set_stick(session),
+                wait(session),
                 sample_position(session),
                 # Savestate findings
                 save_savestate_finding(ss.root),

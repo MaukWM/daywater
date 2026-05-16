@@ -146,11 +146,28 @@ TOOLS_RUNTIME = """\
 - `scan_memory_diff(start, end, min_delta, max_delta)` — differential scan. \
   Call once to capture baseline, send input, call again to see what changed. \
   Filters by delta range to find position data (not timers or frame counters).
-- `send_input(action, duration)` — send controller input. Actions: \
-  stand_still, walk_forward, walk_backward, strafe_left, strafe_right, \
-  jump, walk_forward_and_jump, look_up, look_down. Blocks for duration.
 - `sample_position(x_addr, y_addr, z_addr, duration, interval)` — poll \
-  three addresses over time and return a trajectory table with displacement."""
+  three addresses over time and return a trajectory table with displacement.
+
+### Write watchpoint (GDB stub)
+
+- `find_writers(address, duration=3.0)` — set a hardware write watchpoint \
+  on a memory address and collect all code locations (PCs) that write to it. \
+  Returns a list of PC addresses with hit counts. Use `decompile(pc)` on \
+  the results to see the writing code and determine if an address is the \
+  authoritative source or a copy.
+
+### Controller input (raw GameCube controller)
+
+- `press_button(button, duration=0.3)` — press and release a button. \
+  Buttons: A, B, X, Y, Z, START, L, R, D_UP, D_DOWN, D_LEFT, D_RIGHT.
+- `set_stick(stick, x, y, duration=3.0)` — hold an analog stick at a \
+  position (0.0–1.0, 0.5=neutral), then return to neutral. \
+  stick="MAIN" for left stick, stick="C" for C-stick. \
+  MAIN: x=0.0 full left, x=1.0 full right, y=0.0 full forward, y=1.0 full backward. \
+  C-stick: same mapping (typically camera control).
+- `wait(duration=2.0)` — let the game run with no input for a duration. \
+  Useful to let physics settle or observe values at rest."""
 
 TOOLS_SAVESTATE_FINDINGS = """\
 ### Savestate findings (runtime-specific, scoped to this savestate)

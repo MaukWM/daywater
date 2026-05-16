@@ -107,6 +107,15 @@
       <div id="project-survey-status" class="info-box" hidden></div>
 
       <div class="section-header" style="margin-top: 2rem;">
+        <h2>Controller Mapping</h2>
+      </div>
+      <div id="controller-mapping" class="info-box">
+        <p class="hint" style="margin-bottom:0.75rem;">Describe what each GC button/stick does in this game. Used by runtime tasks (position discovery, noclip).</p>
+        <div class="ctrl-map-grid" id="ctrl-map-grid"></div>
+        <button onclick="saveControllerMapping()" style="margin-top:0.75rem;">Save Mapping</button>
+      </div>
+
+      <div class="section-header" style="margin-top: 2rem;">
         <h2>Knowledge Base</h2>
         <button onclick="location.hash=`#/project/${currentProjectId}/knowledge`">Open Knowledge Base</button>
       </div>
@@ -560,6 +569,9 @@
         // Load savestates.
         loadSavestates();
 
+        // Load controller mapping.
+        loadControllerMapping();
+
         // Load tasks.
         const tasks = await api('GET', `/api/projects/${currentProjectId}/tasks`);
         const list = document.getElementById('task-list');
@@ -938,6 +950,70 @@
         loadSavestates();
       } catch (e) {
         alert('Delete failed: ' + e.message);
+      }
+    }
+
+    // ── Controller Mapping ───────────────────────────────────────────── //
+
+    const GC_BUTTONS = ['A', 'B', 'X', 'Y', 'Z', 'L', 'R', 'START', 'D_UP', 'D_DOWN', 'D_LEFT', 'D_RIGHT'];
+    const GC_STICKS = ['MAIN', 'C'];
+    const STICK_DIRS = ['up', 'down', 'left', 'right'];
+
+    async function loadControllerMapping() {
+      const grid = document.getElementById('ctrl-map-grid');
+      try {
+        const mapping = await api('GET', `/api/projects/${currentProjectId}/controller-mapping`);
+
+        let html = '';
+
+        // Sticks
+        for (const stick of GC_STICKS) {
+          const s = mapping.sticks[stick] || {};
+          const label = stick === 'MAIN' ? 'Main Stick' : 'C-Stick';
+          html += `<div class="ctrl-section">`;
+          html += `<div class="ctrl-row"><span class="ctrl-label">${label}</span><input type="text" class="ctrl-input" id="ctrl-stick-${stick}-desc" value="${s.description || ''}" placeholder="General description" /></div>`;
+          for (const dir of STICK_DIRS) {
+            html += `<div class="ctrl-row ctrl-sub"><span class="ctrl-label">${dir}</span><input type="text" class="ctrl-input" id="ctrl-stick-${stick}-${dir}" value="${s[dir] || ''}" placeholder="" /></div>`;
+          }
+          html += `</div>`;
+        }
+
+        // Buttons
+        html += `<div class="ctrl-section">`;
+        for (const btn of GC_BUTTONS) {
+          const desc = (mapping.buttons || {})[btn] || '';
+          html += `<div class="ctrl-row"><span class="ctrl-label">${btn}</span><input type="text" class="ctrl-input" id="ctrl-btn-${btn}" value="${desc}" placeholder="" /></div>`;
+        }
+        html += `</div>`;
+
+        grid.innerHTML = html;
+      } catch (e) {
+        console.error('Failed to load controller mapping:', e);
+        grid.innerHTML = '<span style="color:var(--text-dim)">Failed to load mapping</span>';
+      }
+    }
+
+    async function saveControllerMapping() {
+      const mapping = { buttons: {}, sticks: {} };
+
+      for (const btn of GC_BUTTONS) {
+        const el = document.getElementById(`ctrl-btn-${btn}`);
+        if (el) mapping.buttons[btn] = el.value.trim();
+      }
+
+      for (const stick of GC_STICKS) {
+        mapping.sticks[stick] = {
+          description: (document.getElementById(`ctrl-stick-${stick}-desc`) || {}).value?.trim() || '',
+        };
+        for (const dir of STICK_DIRS) {
+          mapping.sticks[stick][dir] = (document.getElementById(`ctrl-stick-${stick}-${dir}`) || {}).value?.trim() || '';
+        }
+      }
+
+      try {
+        await api('POST', `/api/projects/${currentProjectId}/controller-mapping`, mapping);
+      } catch (e) {
+        alert('Failed to save mapping: ' + e.message);
       }
     }
 

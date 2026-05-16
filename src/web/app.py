@@ -133,6 +133,39 @@ async def project_event_stream(project_id: str) -> StreamingResponse:
     )
 
 
+# ── Controller Mapping (project level) ───────────────────────────────── #
+
+
+@app.get("/api/projects/{project_id}/controller-mapping")
+async def get_controller_mapping(project_id: str) -> dict:  # type: ignore[type-arg]
+    from src.web.controller_mapping import load_mapping
+
+    project = _get_project(project_id)
+    return load_mapping(project.root)
+
+
+@app.post("/api/projects/{project_id}/controller-mapping")
+async def update_controller_mapping(project_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    from src.web.controller_mapping import load_mapping, save_mapping
+
+    project = _get_project(project_id)
+    # Merge incoming data with existing mapping
+    mapping = load_mapping(project.root)
+    if "buttons" in body:
+        for btn, desc in body["buttons"].items():
+            if btn in mapping["buttons"]:
+                mapping["buttons"][btn] = desc
+    if "sticks" in body:
+        for stick, data in body["sticks"].items():
+            if stick in mapping["sticks"]:
+                if isinstance(data, dict):
+                    for key in ("description", "up", "down", "left", "right"):
+                        if key in data:
+                            mapping["sticks"][stick][key] = data[key]
+    save_mapping(project.root, mapping)
+    return {"ok": True}
+
+
 # ── Task CRUD ────────────────────────────────────────────────────────── #
 
 
