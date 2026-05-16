@@ -99,7 +99,10 @@ async def run_capture_frame(task: Task, iso_path: Path) -> Path:
             with log_file.open("wb") as logf:
                 proc = subprocess.Popen(args, stdout=logf, stderr=subprocess.STDOUT, env=env)
                 try:
-                    # Poll until we have at least 10 frames or 30s passes.
+                    # Poll until we have at least 30 frames or 30s passes.
+                    # Early frames from savestate load are often mid-render
+                    # (half black), so we need to wait for the game to fully
+                    # composite several frames before picking one.
                     deadline = _time.time() + 30
                     while _time.time() < deadline:
                         _time.sleep(0.5)
@@ -107,7 +110,7 @@ async def run_capture_frame(task: Task, iso_path: Path) -> Path:
                             break  # Dolphin exited on its own
                         if frames_dump_dir.exists():
                             pngs = list(frames_dump_dir.glob("*.png"))
-                            if len(pngs) >= 10:
+                            if len(pngs) >= 30:
                                 break
                 finally:
                     if proc.poll() is None:
@@ -123,9 +126,10 @@ async def run_capture_frame(task: Task, iso_path: Path) -> Path:
                 logger.error("capture_no_frames", dolphin_log=log_tail)
                 shutil.rmtree(tmp_root, ignore_errors=True)
                 raise RuntimeError("Dolphin produced no frames — check container logs for details")
-            # Grab ~10th frame if available, otherwise last.
+            # Grab ~20th frame if available, otherwise last.
+            # Early frames from savestate load are often half-rendered.
             sorted_keys = sorted(frames.keys())
-            pick = sorted_keys[min(9, len(sorted_keys) - 1)]
+            pick = sorted_keys[min(19, len(sorted_keys) - 1)]
             return frames[pick]
 
         frame_path = await loop.run_in_executor(_executor, _capture)

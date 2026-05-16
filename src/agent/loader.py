@@ -23,6 +23,7 @@ from inspect_ai.dataset import Sample
 from inspect_ai.model import ChatMessageUser, ContentImage, ContentText
 
 from src.agent.prompts import TASK_INPUT_PREFIX
+from src.findings import FindingsStore
 
 SPECTRE_ROOT = Path(__file__).resolve().parents[2]
 
@@ -132,6 +133,7 @@ def build_sample(
     sample_dir: Path,
     *,
     inventory_text: str = "",
+    project_root: Path | None = None,
 ) -> Sample:
     """Construct one Inspect AI `Sample` from a sample directory.
 
@@ -139,6 +141,9 @@ def build_sample(
     so the agent sees the full binary menu (every analyzed ELF / DOL /
     REL on the disc) and can pick one with `switch_binary` before
     using the static-analysis tools.
+
+    `project_root`, when provided, loads prior findings and injects them
+    into the user message.
     """
     cfg = load_sample_config(sample_dir)
     hint = (sample_dir / "hint.txt").read_text().strip()
@@ -153,13 +158,42 @@ def build_sample(
 
     inv_block = f"\n{inventory_text}\n" if inventory_text else ""
 
+    findings_block = ""
+    research_block = ""
+    if project_root is not None:
+        findings_store = FindingsStore.load(project_root)
+        if findings_store.findings:
+            findings_block = (
+                "\n## Prior findings from earlier tasks\n\n"
+                f"{findings_store.format_table()}\n"
+            )
+
+        research_dir = project_root / "research"
+        if research_dir.exists():
+            index_path = research_dir / "INDEX.md"
+            if index_path.exists():
+                index_text = index_path.read_text().strip()
+                docs = sorted(
+                    p.name for p in research_dir.glob("*.md") if p.name != "INDEX.md"
+                )
+                if docs or "No research yet" not in index_text:
+                    research_block = (
+                        "\n## Research journal from earlier tasks\n\n"
+                        f"{index_text}\n"
+                    )
+                    if docs:
+                        research_block += (
+                            "\nAvailable docs: " + ", ".join(docs)
+                            + "\nUse `read_research(filename)` to read any of these.\n"
+                        )
+
     body = (
         f"{TASK_INPUT_PREFIX}\n\n"
         f"Game: {cfg.description} (ID `{cfg.game_id}`).\n"
         f"Budget: {cfg.verify_budget} tool calls.\n"
         f"Scoring thresholds: HUD region mean diff ≥ {cfg.score_hud_min_mean}, "
         f"preserve region mean diff ≤ {cfg.score_preserve_max_mean}.\n"
-        f"{inv_block}\n"
+        f"{inv_block}{findings_block}{research_block}\n"
         f"Hint:\n{hint}"
     )
 

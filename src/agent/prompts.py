@@ -67,6 +67,26 @@ inventoried binaries freely.
   function. Appears in every future `decompile` header. Use for \
   hypotheses, "ruled out because X", "called from main game loop", etc.
 
+### Project knowledge base (free, persists across tasks)
+
+- `save_finding(kind, label, detail, address="")` — save a structured \
+  discovery. Use `kind="address"` for memory addresses (player position, \
+  health pointer), `kind="function"` for function purposes, \
+  `kind="note"` for general observations. Upserts by address.
+- `list_findings()` — list all structured findings for this game.
+
+### Research journal (free, persists across tasks)
+
+- `list_research()` — read the research INDEX.md + list of available \
+  docs. **Call this at the start of your run** to see what prior tasks \
+  have documented — it may save you significant RE effort.
+- `read_research(filename)` — read a specific research document.
+- `write_research(filename, content)` — write or update a research \
+  document. Use this to document game systems, code structure, function \
+  maps, and anything that helps future tasks. Write like a researcher: \
+  include addresses, function names, reasoning, and what's confirmed \
+  vs hypothetical. You own the INDEX.md — update it when you add docs.
+
 ### Verification (budget-capped)
 
 - `run_gecko(gecko_text)` — applies your candidate Gecko code, runs \
@@ -194,15 +214,30 @@ you, which keeps the binary readable as you go.
 
 ## Submission
 
-When `run_gecko` returns **PASS**, submit the exact `gecko_text` you \
-passed in as your final answer and stop.
+Before submitting your final answer, **document what you learned**:
 
-If you exhaust your budget without a PASS, submit the **exact \
-gecko_text from your highest-`hud_mean` `run_gecko` attempt** — the \
-one that came closest to the threshold. Never submit code you didn't \
-test, never submit an address you guessed at the end. Your textual \
-final answer must be byte-for-byte one of the `gecko_text` strings \
-you already passed into `run_gecko` this session.
+1. **Save structured findings** via `save_finding` — every function \
+   you identified (kind="function"), memory addresses (kind="address"), \
+   and key observations (kind="note").
+2. **Write a research doc** via `write_research` — a short document \
+   summarizing your analysis: what you explored, what the call graph \
+   looks like, which patch sites you tried and why they worked or \
+   didn't, and what questions remain. Then update INDEX.md. \
+   Think of this as a handoff note to the next researcher.
+
+This ensures future tasks on this game can build on your work \
+instead of re-discovering the same things.
+
+When `run_gecko` returns **PASS**, save your findings, then submit \
+the exact `gecko_text` you passed in as your final answer and stop.
+
+If you exhaust your budget without a PASS, still save your findings, \
+then submit the **exact gecko_text from your highest-`hud_mean` \
+`run_gecko` attempt** — the one that came closest to the threshold. \
+Never submit code you didn't test, never submit an address you \
+guessed at the end. Your textual final answer must be byte-for-byte \
+one of the `gecko_text` strings you already passed into `run_gecko` \
+this session.
 """
 
 

@@ -59,6 +59,12 @@
       </div>
 
       <div id="project-survey-status" class="info-box" hidden></div>
+
+      <div class="section-header" style="margin-top: 2rem;">
+        <h2>Knowledge Base</h2>
+        <button onclick="location.hash=`#/project/${currentProjectId}/knowledge`">Open Knowledge Base</button>
+      </div>
+      <div id="kb-summary" class="info-box"></div>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -88,12 +94,8 @@
           <span class="step-status" id="screenshot-status"></span>
         </div>
         <div class="step-body">
-          <div class="btn-group">
-            <button onclick="captureFrame()" id="capture-btn">Capture from Savestate</button>
-            <span class="or">or</span>
-            <input type="file" id="screenshot-input" accept="image/*" />
-            <button onclick="uploadScreenshot()">Upload Screenshot</button>
-          </div>
+          <p class="hint">Boots Dolphin from the savestate, captures a frame, and verifies the game runs correctly.</p>
+          <button onclick="captureFrame()" id="capture-btn">Capture from Savestate</button>
           <div id="capture-spinner" class="spinner" hidden>booting dolphin...</div>
         </div>
       </section>
@@ -181,6 +183,58 @@
     </div>
   </main>
 
+  <!-- Knowledge Base: outside <main> to fill full viewport -->
+  <div id="view-knowledge" class="view">
+    <div style="padding:1rem 1.5rem 0.75rem 2rem; border-bottom:1px solid var(--border); flex-shrink:0;">
+      <nav class="breadcrumb" id="kb-breadcrumb"></nav>
+      <div class="section-header">
+        <h2>Knowledge Base</h2>
+        <button class="danger" id="kb-reset-btn" onclick="resetKnowledge()">Reset All</button>
+      </div>
+    </div>
+
+    <div style="padding:0.75rem 1.5rem 0.75rem 2rem; flex-shrink:0;">
+      <button class="kb-tab active" onclick="switchKbTab('research')" id="kb-tab-research">Research</button>
+      <button class="kb-tab" onclick="switchKbTab('annotations')" id="kb-tab-annotations">Annotations</button>
+    </div>
+
+    <div id="kb-panel-research" class="kb-panel">
+      <div style="display:flex; flex-direction:row; height:100%; overflow:hidden; margin:0 1rem;">
+        <div style="width:220px; min-width:220px; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; flex-shrink:0; padding-top:0.5rem;">
+          <div style="padding:0.5rem 1rem; font-size:0.7rem; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid var(--border); background:var(--bg);">Documents</div>
+          <div id="kb-file-list"></div>
+        </div>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+          <div id="kb-doc-empty" class="kb-content-empty">Select a document to view</div>
+          <div id="kb-doc-view" style="display:none; flex-direction:column; height:100%; overflow:hidden;">
+            <div style="padding:0.6rem 1.5rem; border-bottom:1px solid var(--border); background:var(--surface);">
+              <span id="kb-doc-name" class="kb-doc-name"></span>
+            </div>
+            <div id="kb-doc-content" style="flex:1; padding:1.2rem 2rem; font-size:0.82rem; color:var(--text); overflow-y:auto; white-space:pre-wrap; word-wrap:break-word; overflow-wrap:break-word; line-height:1.7; margin:0; background:var(--bg); font-family:inherit;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="kb-panel-annotations" class="kb-panel" hidden>
+      <div style="padding: 1.5rem;">
+        <div id="kb-findings" class="kb-section" hidden>
+          <h3 class="kb-heading">Findings</h3>
+          <table class="kb-table" id="kb-findings-table"></table>
+        </div>
+        <div id="kb-renames" class="kb-section" hidden>
+          <h3 class="kb-heading">Function Renames</h3>
+          <table class="kb-table" id="kb-renames-table"></table>
+        </div>
+        <div id="kb-notes" class="kb-section" hidden>
+          <h3 class="kb-heading">Notes</h3>
+          <table class="kb-table" id="kb-notes-table"></table>
+        </div>
+        <div id="kb-annotations-empty" class="empty-state">No annotations yet.</div>
+      </div>
+    </div>
+  </div>
+
   <script src="/mask-painter.js"></script>
   <script>
     // ── State ──────────────────────────────────────────────────────── //
@@ -203,12 +257,18 @@
 
       const projectMatch = hash.match(/^#\/project\/([a-f0-9]+)$/);
       const taskMatch = hash.match(/^#\/project\/([a-f0-9]+)\/task\/([a-f0-9]+)$/);
+      const knowledgeMatch = hash.match(/^#\/project\/([a-f0-9]+)\/knowledge$/);
 
       if (taskMatch) {
         currentProjectId = taskMatch[1];
         currentTaskId = taskMatch[2];
         document.getElementById('view-task').classList.add('active');
         loadTask();
+      } else if (knowledgeMatch) {
+        currentProjectId = knowledgeMatch[1];
+        currentTaskId = null;
+        document.getElementById('view-knowledge').classList.add('active');
+        loadKnowledgePage();
       } else if (projectMatch) {
         currentProjectId = projectMatch[1];
         currentTaskId = null;
@@ -472,8 +532,157 @@
             <button class="danger delete-btn" onclick="event.stopPropagation(); deleteTask('${t.task_id}')">x</button>
           </li>`;
         }).join('');
+
+        // Show KB summary
+        try {
+          const kb = await api('GET', `/api/projects/${currentProjectId}/knowledge`);
+          const res = await api('GET', `/api/projects/${currentProjectId}/research`);
+          const counts = [];
+          if (kb.findings.length) counts.push(`${kb.findings.length} findings`);
+          if (kb.renames.length) counts.push(`${kb.renames.length} renames`);
+          if (res.docs.length) counts.push(`${res.docs.length} research docs`);
+          document.getElementById('kb-summary').textContent = counts.length
+            ? counts.join(' · ')
+            : 'No knowledge yet';
+        } catch { document.getElementById('kb-summary').textContent = ''; }
       } catch (e) {
         console.error('Failed to load project:', e);
+      }
+    }
+
+    // ── Knowledge Base Page ──────────────────────────────────────────── //
+
+    async function loadKnowledgePage() {
+      const p = await api('GET', `/api/projects/${currentProjectId}`);
+      // Use the KB-local breadcrumb (inside the fullscreen view)
+      const kbBc = document.getElementById('kb-breadcrumb');
+      kbBc.innerHTML = [
+        { text: 'Projects', href: '#/' },
+        { text: p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
+        { text: 'knowledge' },
+      ].map((part, i, arr) => {
+        if (i < arr.length - 1) return `<a href="${part.href}">${part.text}</a><span class="sep">/</span>`;
+        return `<span>${part.text}</span>`;
+      }).join('');
+      switchKbTab('research');
+      loadKbResearch();
+      loadKbAnnotations();
+    }
+
+    function switchKbTab(tab) {
+      document.querySelectorAll('.kb-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.kb-panel').forEach(p => p.hidden = true);
+      document.getElementById(`kb-tab-${tab}`).classList.add('active');
+      document.getElementById(`kb-panel-${tab}`).hidden = false;
+    }
+
+    async function loadKbResearch() {
+      try {
+        const res = await api('GET', `/api/projects/${currentProjectId}/research`);
+        const listEl = document.getElementById('kb-file-list');
+        const allDocs = ['INDEX.md', ...res.docs];
+        listEl.innerHTML = allDocs.map(d =>
+          `<div style="padding:0.5rem 1rem; cursor:pointer; user-select:none; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text);" class="kb-file-item" onclick="openKbDoc('${d}')" id="kb-file-${d.replace('.','_')}">${d}</div>`
+        ).join('');
+        // Open INDEX.md by default
+        if (allDocs.length) openKbDoc('INDEX.md');
+      } catch (e) {
+        console.error('Failed to load research:', e);
+      }
+    }
+
+    async function openKbDoc(filename) {
+      // Highlight active file
+      document.querySelectorAll('.kb-file-item').forEach(f => f.classList.remove('active'));
+      const fileEl = document.getElementById(`kb-file-${filename.replace('.','_')}`);
+      if (fileEl) fileEl.classList.add('active');
+
+      try {
+        const res = await api('GET', `/api/projects/${currentProjectId}/research/${filename}`);
+        document.getElementById('kb-doc-name').textContent = filename;
+        document.getElementById('kb-doc-content').innerText = res.content;
+        document.getElementById('kb-doc-view').style.display = 'flex';
+        document.getElementById('kb-doc-empty').style.display = 'none';
+      } catch (e) {
+        document.getElementById('kb-doc-name').textContent = filename;
+        document.getElementById('kb-doc-content').innerText = '(empty or not found)';
+        document.getElementById('kb-doc-view').style.display = 'flex';
+        document.getElementById('kb-doc-empty').style.display = 'none';
+      }
+    }
+
+    async function loadKbAnnotations() {
+      const findingsEl = document.getElementById('kb-findings');
+      const renamesEl = document.getElementById('kb-renames');
+      const notesEl = document.getElementById('kb-notes');
+      const emptyEl = document.getElementById('kb-annotations-empty');
+      let hasContent = false;
+
+      try {
+        const kb = await api('GET', `/api/projects/${currentProjectId}/knowledge`);
+
+        if (kb.findings.length) {
+          hasContent = true;
+          findingsEl.hidden = false;
+          const kindClass = k => k === 'address' ? 'kb-kind-addr' : k === 'function' ? 'kb-kind-func' : 'kb-kind-note';
+          document.getElementById('kb-findings-table').innerHTML =
+            `<tr><th>Kind</th><th>Address</th><th>Label</th><th class="kb-th-detail">Detail</th><th></th></tr>` +
+            kb.findings.map(f => `<tr>
+              <td><span class="kb-kind ${kindClass(f.kind)}">${f.kind}</span></td>
+              <td class="kb-addr">${f.address ? '0x' + f.address : ''}</td>
+              <td class="kb-name">${f.label}</td>
+              <td class="kb-detail">${f.detail}</td>
+              <td><button class="danger" style="padding:0.1rem 0.4rem;font-size:0.7rem" onclick="deleteFinding('${f.id}')">x</button></td>
+            </tr>`).join('');
+        } else { findingsEl.hidden = true; }
+
+        if (kb.renames.length) {
+          hasContent = true;
+          renamesEl.hidden = false;
+          document.getElementById('kb-renames-table').innerHTML =
+            `<tr><th>Address</th><th>Name</th><th>Binary</th></tr>` +
+            kb.renames.map(r => `<tr>
+              <td class="kb-addr">0x${r.address}</td>
+              <td class="kb-name">${r.name}</td>
+              <td class="kb-dim">${r.binary}</td>
+            </tr>`).join('');
+        } else { renamesEl.hidden = true; }
+
+        if (kb.notes.length) {
+          hasContent = true;
+          notesEl.hidden = false;
+          document.getElementById('kb-notes-table').innerHTML =
+            `<tr><th>Address</th><th class="kb-th-detail">Note</th><th>Binary</th></tr>` +
+            kb.notes.map(n => `<tr>
+              <td class="kb-addr">0x${n.address}</td>
+              <td class="kb-detail">${n.text}</td>
+              <td class="kb-dim">${n.binary}</td>
+            </tr>`).join('');
+        } else { notesEl.hidden = true; }
+
+        emptyEl.hidden = hasContent;
+      } catch (e) {
+        console.error('Failed to load annotations:', e);
+      }
+    }
+
+    async function resetKnowledge() {
+      if (!confirm('Clear all findings, research docs, function renames, and notes for this project?')) return;
+      try {
+        await api('DELETE', `/api/projects/${currentProjectId}/knowledge`);
+        loadKnowledgePage();
+      } catch (e) {
+        alert('Reset failed: ' + e.message);
+      }
+    }
+
+    async function deleteFinding(findingId) {
+      if (!confirm('Delete this finding?')) return;
+      try {
+        await api('DELETE', `/api/projects/${currentProjectId}/findings/${findingId}`);
+        loadKnowledgeBase();
+      } catch (e) {
+        alert('Delete failed: ' + e.message);
       }
     }
 

@@ -24,6 +24,8 @@ from src.agent.discovery_tools import (
     list_iso_contents,
     switch_binary,
 )
+from src.agent.findings_tools import list_findings, save_finding
+from src.agent.research_tools import list_research, read_research, write_research
 from src.agent.ghidra_tools import (
     add_note,
     callees,
@@ -37,6 +39,7 @@ from src.agent.ghidra_tools import (
 from src.agent.prompts import SYSTEM_PROMPT, TASK_INPUT_PREFIX
 from src.agent.scorer import load_mask, score_against_mask
 from src.agent.tools import _LAST_PASS_KEY
+from src.findings import FindingsStore
 from src.dolphin import collect_dump, load_png_frames, parse_gecko, read_game_id, run_dolphin
 from src.dolphin.diff import load_image_rgb
 from src.dolphin.runner import write_user_dir
@@ -49,13 +52,41 @@ def build_sample_from_task(task: Task, project: Project) -> Sample:
     tcfg = task.config
     inv_block = f"\n{pcfg.inventory_text}\n" if pcfg.inventory_text else ""
 
+    # Inject prior findings if any exist
+    findings_store = FindingsStore.load(project.root)
+    findings_block = ""
+    if findings_store.findings:
+        findings_block = (
+            "\n## Prior findings from earlier tasks\n\n"
+            f"{findings_store.format_table()}\n"
+        )
+
+    # Inject research index if any docs exist
+    research_dir = project.root / "research"
+    research_block = ""
+    if research_dir.exists():
+        index_path = research_dir / "INDEX.md"
+        if index_path.exists():
+            index_text = index_path.read_text().strip()
+            docs = sorted(p.name for p in research_dir.glob("*.md") if p.name != "INDEX.md")
+            if docs or "No research yet" not in index_text:
+                research_block = (
+                    "\n## Research journal from earlier tasks\n\n"
+                    f"{index_text}\n"
+                )
+                if docs:
+                    research_block += (
+                        "\nAvailable docs: " + ", ".join(docs)
+                        + "\nUse `read_research(filename)` to read any of these.\n"
+                    )
+
     body = (
         f"{TASK_INPUT_PREFIX}\n\n"
         f"Game: {pcfg.game_id}\n"
         f"Budget: {tcfg.verify_budget} tool calls.\n"
         f"Scoring thresholds: HUD region mean diff >= {tcfg.hud_min_mean}, "
         f"preserve region mean diff <= {tcfg.preserve_max_mean}.\n"
-        f"{inv_block}\n"
+        f"{inv_block}{findings_block}{research_block}\n"
         f"Hint:\n{tcfg.hint}"
     )
 
@@ -289,6 +320,11 @@ def build_task_from_project_task(
                 extract_iso(iso_path, extract_root),
                 analyze_binary(extract_root),
                 switch_binary(),
+                save_finding(project.root),
+                list_findings(project.root),
+                list_research(project.root),
+                read_research(project.root),
+                write_research(project.root),
             ],
             message_limit=200,
         ),

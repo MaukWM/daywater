@@ -22,6 +22,8 @@ from src.agent.discovery_tools import (
     list_iso_contents,
     switch_binary,
 )
+from src.agent.findings_tools import list_findings, save_finding
+from src.agent.research_tools import list_research, read_research, write_research
 from src.agent.ghidra_tools import (
     add_note,
     callees,
@@ -169,6 +171,11 @@ def hud_off(iso: str = "", savestate: str = "") -> Task:
     extract_root = _extract_root_for(iso_path)
     extract_root.mkdir(parents=True, exist_ok=True)
 
+    # CLI mode: persist findings under sessions/_cli/<game_id>/
+    game_id = read_game_id(iso_path)
+    cli_project_root = SPECTRE_ROOT / "sessions" / "_cli" / game_id
+    cli_project_root.mkdir(parents=True, exist_ok=True)
+
     # Include the user's env-supplied ELF (if any) so prior-run notes
     # under its SHA-1 cache survive into the inventory.
     extras: list[Path] = []
@@ -181,7 +188,7 @@ def hud_off(iso: str = "", savestate: str = "") -> Task:
     inventory = survey_and_analyze(iso_path, extract_root, extras=extras)
     inventory_text = format_inventory(inventory)
 
-    sample = build_sample(sample_dir, inventory_text=inventory_text)
+    sample = build_sample(sample_dir, inventory_text=inventory_text, project_root=cli_project_root)
     return Task(
         dataset=[sample],
         solver=basic_agent(
@@ -200,6 +207,11 @@ def hud_off(iso: str = "", savestate: str = "") -> Task:
                 extract_iso(iso_path, extract_root),
                 analyze_binary(extract_root),
                 switch_binary(),
+                save_finding(cli_project_root),
+                list_findings(cli_project_root),
+                list_research(cli_project_root),
+                read_research(cli_project_root),
+                write_research(cli_project_root),
             ],
             message_limit=200,
         ),

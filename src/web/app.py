@@ -11,10 +11,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.findings import FindingsStore
+from src.ghidra.notes import NotesStore
 from src.web.events import stream_events
 from src.web.mask import save_mask
 from src.web.sessions import ProjectStore, TaskState
-from src.web.uploads import save_iso, save_reference_frame, save_savestate, save_screenshot
+from src.web.uploads import save_iso, save_reference_frame, save_savestate
 
 app = FastAPI(title="Spectre", version="0.2.0")
 
@@ -200,27 +202,6 @@ async def upload_savestate(project_id: str, task_id: str, file: UploadFile) -> d
     return result
 
 
-@app.post("/api/projects/{project_id}/tasks/{task_id}/upload/screenshot")
-async def upload_screenshot(project_id: str, task_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
-    project, task = _get_task(project_id, task_id)
-    if task.state not in (TaskState.SAVESTATE_UPLOADED, TaskState.FRAME_READY, TaskState.MASK_READY):
-        raise HTTPException(400, f"Cannot upload screenshot in state {task.state}")
-
-    tmp = Path(tempfile.mktemp(suffix=".png", prefix="spectre_upload_"))
-    size = 0
-    with tmp.open("wb") as f:
-        while chunk := await file.read(1 << 20):
-            f.write(chunk)
-            size += len(chunk)
-
-    try:
-        result = save_screenshot(task, tmp, size)
-    except ValueError as e:
-        tmp.unlink(missing_ok=True)
-        raise HTTPException(400, str(e))
-    return result
-
-
 # ── Capture frame from Dolphin ───────────────────────────────────────── #
 
 
@@ -348,6 +329,117 @@ async def get_task_file(project_id: str, task_id: str, filename: str) -> FileRes
     if not path.exists():
         raise HTTPException(404, f"File {filename} not found")
     return FileResponse(path)
+
+
+# ── Knowledge base (findings + Ghidra notes/renames) ─────────────────── #
+
+
+@app.get("/api/projects/{project_id}/findings")
+async def get_findings(project_id: str) -> list[dict]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    fs = FindingsStore.load(project.root)
+    from dataclasses import asdict
+
+    return [asdict(f) for f in fs.list_all()]
+
+
+@app.delete("/api/projects/{project_id}/findings/{finding_id}")
+async def delete_finding(project_id: str, finding_id: str) -> dict[str, bool]:
+    project = _get_project(project_id)
+    fs = FindingsStore.load(project.root)
+    if not fs.remove(finding_id):
+        raise HTTPException(404, f"Finding {finding_id} not found")
+    return {"ok": True}
+
+
+@app.delete("/api/projects/{project_id}/knowledge")
+async def reset_knowledge(project_id: str) -> dict[str, bool]:
+    """Clear all findings, research docs, and Ghidra renames/notes."""
+    project = _get_project(project_id)
+
+    # Clear findings
+    fs = FindingsStore.load(project.root)
+    fs.findings.clear()
+    fs._flush()
+
+    # Clear research docs
+    research_dir = project.root / "research"
+    if research_dir.exists():
+        shutil.rmtree(research_dir, ignore_errors=True)
+
+    # Clear Ghidra notes/renames from all cached binaries
+    cache_root = Path("cache/binaries")
+    if not cache_root.exists():
+        cache_root = Path("/app/cache/binaries")
+    if cache_root.exists():
+        for sha_dir in cache_root.iterdir():
+            notes_path = sha_dir / "notes.json"
+            if notes_path.exists():
+                ns = NotesStore.load(sha_dir)
+                if ns.renames or ns.notes:
+                    ns.renames.clear()
+                    ns.notes.clear()
+                    ns._flush()
+
+    return {"ok": True}
+
+
+@app.get("/api/projects/{project_id}/research")
+async def get_research_index(project_id: str) -> dict:  # type: ignore[type-arg]
+    """Return the research index + list of available docs."""
+    project = _get_project(project_id)
+    research_dir = project.root / "research"
+    if not research_dir.exists():
+        return {"index": "", "docs": []}
+    index_path = research_dir / "INDEX.md"
+    index_text = index_path.read_text() if index_path.exists() else ""
+    docs = sorted(p.name for p in research_dir.glob("*.md") if p.name != "INDEX.md")
+    return {"index": index_text, "docs": docs}
+
+
+@app.get("/api/projects/{project_id}/research/{filename}")
+async def get_research_doc(project_id: str, filename: str) -> dict:  # type: ignore[type-arg]
+    """Return a single research document."""
+    project = _get_project(project_id)
+    research_dir = project.root / "research"
+    path = research_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(research_dir.resolve()):
+        raise HTTPException(404, f"Document {filename} not found")
+    return {"filename": filename, "content": path.read_text()}
+
+
+@app.get("/api/projects/{project_id}/knowledge")
+async def get_knowledge(project_id: str) -> dict:  # type: ignore[type-arg]
+    """Combined knowledge base: findings + all Ghidra renames/notes across cached binaries."""
+    project = _get_project(project_id)
+
+    # Findings
+    fs = FindingsStore.load(project.root)
+    from dataclasses import asdict
+
+    findings = [asdict(f) for f in fs.list_all()]
+
+    # Ghidra notes/renames from all analyzed binaries
+    cache_root = Path("cache/binaries")
+    if not cache_root.exists():
+        cache_root = Path("/app/cache/binaries")
+
+    renames: list[dict[str, str]] = []
+    notes: list[dict[str, str]] = []
+
+    if cache_root.exists():
+        for sha_dir in sorted(cache_root.iterdir()):
+            notes_path = sha_dir / "notes.json"
+            if not notes_path.exists():
+                continue
+            ns = NotesStore.load(sha_dir)
+            sha1 = sha_dir.name
+            for addr, name in ns.renames.items():
+                renames.append({"address": addr, "name": name, "binary": sha1[:8]})
+            for addr, text in ns.notes.items():
+                notes.append({"address": addr, "text": text, "binary": sha1[:8]})
+
+    return {"findings": findings, "renames": renames, "notes": notes}
 
 
 # ── Static frontend ─────────────────────────────────────────────────── #
