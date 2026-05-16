@@ -52,6 +52,9 @@ class ProjectConfig:
     project_id: str
     created_at: float = field(default_factory=time.time)
 
+    # User-editable display name (defaults to game_id).
+    name: str = ""
+
     # Set after ISO upload.
     game_id: str = ""
     iso_sha1: str = ""

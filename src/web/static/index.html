@@ -43,86 +43,6 @@
     </div>
 
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <!-- VIEW: Project detail                                           -->
-    <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="view-project" class="view">
-      <div class="project-info" id="project-info"></div>
-
-      <div class="section-header">
-        <h2>Savestates</h2>
-      </div>
-
-      <ul class="savestate-list" id="savestate-list"></ul>
-      <div id="no-savestates" class="empty-state">
-        No savestates yet. Upload one to get started.
-      </div>
-
-      <div class="upload-form" id="savestate-upload-form">
-        <label>Upload a Dolphin savestate (.s01/.sav):</label>
-        <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
-          <input type="file" id="savestate-file-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" />
-          <input type="text" id="savestate-name-input" placeholder="Name (optional)" style="width:200px;" />
-          <button onclick="uploadProjectSavestate()">Upload</button>
-        </div>
-      </div>
-
-      <!-- Savestate detail panel (shown when a savestate is expanded) -->
-      <div id="savestate-detail" class="info-box" hidden>
-        <div style="display:flex; justify-content:space-between; align-items:start;">
-          <div style="flex:1;">
-            <div class="row"><span class="label">ID</span><span class="value" id="ss-detail-id"></span></div>
-            <div class="row"><span class="label">Name</span><input type="text" id="ss-detail-name" style="width:200px;" /></div>
-            <div class="row"><span class="label">Notes</span><textarea id="ss-detail-notes" rows="3" style="width:100%;"></textarea></div>
-            <button onclick="saveSavestateNotes()" style="margin-top:0.5rem;">Save Notes</button>
-          </div>
-          <div style="margin-left:1rem;">
-            <img id="ss-detail-screenshot" style="max-width:320px; max-height:240px; border:1px solid var(--border); display:none;" />
-            <button onclick="renderSavestateScreenshot()" id="ss-screenshot-btn" style="margin-top:0.5rem;">Render Screenshot</button>
-            <div id="ss-screenshot-spinner" class="spinner" hidden>booting dolphin...</div>
-          </div>
-        </div>
-        <div id="ss-findings-section" style="margin-top:1rem;" hidden>
-          <div class="section-header" style="margin-bottom:0.5rem;">
-            <h2>Findings</h2>
-          </div>
-          <table class="kb-table" id="ss-findings-table"></table>
-        </div>
-        <div id="ss-no-findings" style="margin-top:1rem; color:var(--text-dim); font-size:0.8rem;">No findings for this savestate.</div>
-      </div>
-
-      <div class="section-header" style="margin-top: 2rem;">
-        <h2>Tasks</h2>
-        <div class="btn-group">
-          <button onclick="createTask('hud_detection')">+ HUD Detection</button>
-          <button onclick="createTask('research')">+ Research</button>
-          <button onclick="createTask('position_discovery')">+ Position Discovery</button>
-        </div>
-      </div>
-
-      <ul class="task-list" id="task-list"></ul>
-      <div id="no-tasks" class="empty-state" hidden>
-        No tasks yet. Create one to start analyzing.
-      </div>
-
-      <div id="project-survey-status" class="info-box" hidden></div>
-
-      <div class="section-header" style="margin-top: 2rem;">
-        <h2>Controller Mapping</h2>
-      </div>
-      <div id="controller-mapping" class="info-box">
-        <p class="hint" style="margin-bottom:0.75rem;">Describe what each GC button/stick does in this game. Used by runtime tasks (position discovery, noclip).</p>
-        <div class="ctrl-map-grid" id="ctrl-map-grid"></div>
-        <button onclick="saveControllerMapping()" style="margin-top:0.75rem;">Save Mapping</button>
-      </div>
-
-      <div class="section-header" style="margin-top: 2rem;">
-        <h2>Knowledge Base</h2>
-        <button onclick="location.hash=`#/project/${currentProjectId}/knowledge`">Open Knowledge Base</button>
-      </div>
-      <div id="kb-summary" class="info-box"></div>
-    </div>
-
-    <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- VIEW: Task wizard                                              -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <div id="view-task" class="view">
@@ -240,6 +160,103 @@
       </section>
     </div>
   </main>
+
+  <!-- Project detail: full-page split layout -->
+  <div id="view-project" class="view proj-page">
+    <div class="proj-topbar">
+      <nav class="breadcrumb" id="proj-breadcrumb"></nav>
+      <div class="proj-info-row" id="project-info"></div>
+      <div id="project-survey-status" class="proj-survey" hidden></div>
+    </div>
+
+    <div class="proj-columns">
+      <!-- LEFT: Savestates -->
+      <div class="proj-left">
+        <div class="proj-panel-header">
+          <h2>Savestates</h2>
+        </div>
+
+        <div class="proj-panel-body">
+          <ul class="savestate-list" id="savestate-list"></ul>
+          <div id="no-savestates" class="empty-state-sm">
+            No savestates yet. Upload one below.
+          </div>
+
+          <!-- Savestate detail -->
+          <div id="savestate-detail" class="ss-detail" hidden>
+            <div class="ss-detail-top">
+              <div class="ss-detail-meta">
+                <div class="row"><span class="label">Name</span><input type="text" id="ss-detail-name" style="width:100%;" /></div>
+                <div class="row" style="align-items:start;"><span class="label">Notes</span><textarea id="ss-detail-notes" rows="3" style="width:100%;"></textarea></div>
+                <button onclick="saveSavestateNotes()" style="margin-top:0.5rem;">Save Notes</button>
+              </div>
+              <div class="ss-detail-screenshot">
+                <img id="ss-detail-screenshot" style="max-width:280px; max-height:210px; border:1px solid var(--border); display:none;" />
+                <button onclick="renderSavestateScreenshot()" id="ss-screenshot-btn">Render Screenshot</button>
+                <div id="ss-screenshot-spinner" class="spinner" hidden>booting dolphin...</div>
+              </div>
+            </div>
+            <span id="ss-detail-id" hidden></span>
+
+            <div id="ss-findings-section" style="margin-top:0.75rem;" hidden>
+              <h3 style="font-size:0.78rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Findings</h3>
+              <table class="kb-table" id="ss-findings-table"></table>
+            </div>
+            <div id="ss-no-findings" style="margin-top:0.5rem; color:var(--text-dim); font-size:0.78rem;">No findings for this savestate.</div>
+          </div>
+
+          <div class="ss-upload">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+              <input type="file" id="savestate-file-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" />
+              <input type="text" id="savestate-name-input" placeholder="Name (optional)" style="width:160px;" />
+              <button onclick="uploadProjectSavestate()">Upload</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Tasks + Controller Mapping + KB -->
+      <div class="proj-right">
+        <div class="proj-panel-header">
+          <h2>Tasks</h2>
+          <div class="btn-group">
+            <button onclick="createTask('hud_detection')">+ HUD</button>
+            <button onclick="createTask('research')">+ Research</button>
+            <button onclick="createTask('position_discovery')">+ Position</button>
+          </div>
+        </div>
+
+        <div class="proj-panel-body">
+          <ul class="task-list" id="task-list"></ul>
+          <div id="no-tasks" class="empty-state-sm" hidden>
+            No tasks yet.
+          </div>
+
+          <!-- Controller Mapping (collapsible) -->
+          <div class="proj-section">
+            <div class="proj-section-header" onclick="toggleSection('ctrl-map-content')">
+              <h2>Controller Mapping</h2>
+              <span class="toggle-icon" id="ctrl-map-content-icon">+</span>
+            </div>
+            <div id="ctrl-map-content" class="proj-section-body" hidden>
+              <p class="hint" style="margin-bottom:0.5rem;">What each GC input does in this game. Used by runtime tasks.</p>
+              <div class="ctrl-map-grid" id="ctrl-map-grid"></div>
+              <button onclick="saveControllerMapping()" style="margin-top:0.5rem;">Save Mapping</button>
+            </div>
+          </div>
+
+          <!-- Knowledge Base -->
+          <div class="proj-section">
+            <div class="proj-section-header">
+              <h2>Knowledge Base</h2>
+              <button onclick="location.hash=`#/project/${currentProjectId}/knowledge`" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Open</button>
+            </div>
+            <div id="kb-summary" style="padding:0.4rem 0; font-size:0.8rem; color:var(--text-dim);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Knowledge Base: outside <main> to fill full viewport -->
   <div id="view-knowledge" class="view">
@@ -425,7 +442,7 @@
             : `<span class="status-tag analyzing">analyzing...</span>`;
           return `<li>
             <span class="cursor" onclick="location.hash='#/project/${p.project_id}'">&gt;</span>
-            <span class="game-id" onclick="location.hash='#/project/${p.project_id}'">${p.game_id || '...'}</span>
+            <span class="game-id" onclick="location.hash='#/project/${p.project_id}'">${p.name || p.game_id || '...'}</span>
             <span class="meta" onclick="location.hash='#/project/${p.project_id}'">${p.iso_sha1 ? p.iso_sha1.slice(0, 8) : ''} &middot; ${timeAgo(p.created_at)}</span>
             ${survey}
             <button class="danger delete-btn" onclick="event.stopPropagation(); deleteProject('${p.project_id}')">x</button>
@@ -536,29 +553,39 @@
     // ── Project detail ─────────────────────────────────────────────── //
 
     async function loadProject() {
-      setBreadcrumb([
+      // Use the project-local breadcrumb
+      const projBc = document.getElementById('proj-breadcrumb');
+      projBc.innerHTML = [
         { text: 'Projects', href: '#/' },
         { text: '...', href: `#/project/${currentProjectId}` },
-      ]);
+      ].map((p, i, arr) => {
+        if (i < arr.length - 1) return `<a href="${p.href}">${p.text}</a><span class="sep">/</span>`;
+        return `<span>${p.text}</span>`;
+      }).join('');
 
       try {
         const p = await api('GET', `/api/projects/${currentProjectId}`);
 
-        setBreadcrumb([
+        projBc.innerHTML = [
           { text: 'Projects', href: '#/' },
-          { text: p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
-        ]);
+          { text: p.name || p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
+        ].map((part, i, arr) => {
+          if (i < arr.length - 1) return `<a href="${part.href}">${part.text}</a><span class="sep">/</span>`;
+          return `<span>${part.text}</span>`;
+        }).join('');
 
         const info = document.getElementById('project-info');
         const surveyText = p.survey_complete
-          ? `<span class="value green">${p.survey_binaries_done} binaries analyzed</span>`
-          : `<span class="value" style="color:var(--amber)">${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'} binaries...</span>`;
+          ? `<span class="proj-tag green">${p.survey_binaries_done} binaries</span>`
+          : `<span class="proj-tag amber">${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}...</span>`;
 
+        const displayName = p.name || p.game_id;
         info.innerHTML = `
-          <div class="row"><span class="label">Game ID</span><span class="value green">${p.game_id}</span></div>
-          <div class="row"><span class="label">ISO SHA-1</span><span class="value">${p.iso_sha1 ? p.iso_sha1.slice(0, 16) + '...' : 'n/a'}</span></div>
-          <div class="row"><span class="label">Size</span><span class="value">${p.iso_size ? (p.iso_size / 1e6).toFixed(0) + ' MB' : 'n/a'}</span></div>
-          <div class="row"><span class="label">Survey</span>${surveyText}</div>
+          <span class="proj-game-id proj-name-editable" onclick="editProjectName(this)" title="Click to rename">${displayName}</span>
+          <span class="proj-meta">${p.game_id}</span>
+          <span class="proj-meta">${p.iso_sha1 ? p.iso_sha1.slice(0, 12) : ''}</span>
+          <span class="proj-meta">${p.iso_size ? (p.iso_size / 1e6).toFixed(0) + ' MB' : ''}</span>
+          ${surveyText}
         `;
 
         // Poll survey if not complete.
@@ -588,10 +615,12 @@
           let verdict = '';
           if (t.result_verdict === 'PASS') verdict = '<span class="verdict-pass">PASS</span>';
           else if (t.result_verdict === 'FAIL') verdict = '<span class="verdict-fail">FAIL</span>';
-          return `<li>
-            <span class="cursor" onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">&gt;</span>
-            <span class="task-type" onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">${t.task_type}</span>
-            <span class="task-state" onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">${t.state}</span>
+          const taskLabel = t.task_type.replace('_', ' ');
+          return `<li onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">
+            <span class="cursor">&gt;</span>
+            <span class="task-type">${taskLabel}</span>
+            <span class="task-state">${t.state}</span>
+            <span class="task-time">${timeAgo(t.created_at)}</span>
             ${verdict}
             <button class="danger delete-btn" onclick="event.stopPropagation(); deleteTask('${t.task_id}')">x</button>
           </li>`;
@@ -844,7 +873,17 @@
       }
     }
 
+    function collapseSavestate() {
+      currentSavestateId = null;
+      document.getElementById('savestate-detail').hidden = true;
+    }
+
     async function expandSavestate(ssId) {
+      // Toggle: click same savestate again to close
+      if (currentSavestateId === ssId) {
+        collapseSavestate();
+        return;
+      }
       currentSavestateId = ssId;
       const detail = document.getElementById('savestate-detail');
       detail.hidden = false;
@@ -944,12 +983,58 @@
       try {
         await api('DELETE', `/api/projects/${currentProjectId}/savestates/${ssId}`);
         if (currentSavestateId === ssId) {
-          document.getElementById('savestate-detail').hidden = true;
-          currentSavestateId = null;
+          collapseSavestate();
         }
         loadSavestates();
       } catch (e) {
         alert('Delete failed: ' + e.message);
+      }
+    }
+
+    // ── Editable project name ───────────────────────────────────────── //
+
+    function editProjectName(el) {
+      const current = el.textContent;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = current;
+      input.className = 'proj-name-input';
+      input.style.cssText = 'font-size:1rem; font-weight:600; color:var(--green); background:var(--bg); border:1px solid var(--green-dim); padding:0.2rem 0.4rem; font-family:inherit; width:250px;';
+
+      const save = async () => {
+        const newName = input.value.trim();
+        if (newName && newName !== current) {
+          try {
+            await api('POST', `/api/projects/${currentProjectId}/name`, { name: newName });
+          } catch (e) {
+            console.error('Failed to rename:', e);
+          }
+        }
+        loadProject();
+      };
+
+      input.addEventListener('blur', save);
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { loadProject(); }
+      });
+
+      el.replaceWith(input);
+      input.focus();
+      input.select();
+    }
+
+    // ── Collapsible sections ─────────────────────────────────────────── //
+
+    function toggleSection(id) {
+      const el = document.getElementById(id);
+      const icon = document.getElementById(id + '-icon');
+      if (el.hidden) {
+        el.hidden = false;
+        if (icon) icon.textContent = '−';
+      } else {
+        el.hidden = true;
+        if (icon) icon.textContent = '+';
       }
     }
 

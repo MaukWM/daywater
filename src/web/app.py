@@ -61,6 +61,7 @@ async def list_projects() -> list[dict]:  # type: ignore[type-arg]
     return [
         {
             "project_id": p.project_id,
+            "name": p.name,
             "game_id": p.game_id,
             "iso_sha1": p.iso_sha1,
             "iso_size": p.iso_size,
@@ -76,6 +77,14 @@ async def list_projects() -> list[dict]:  # type: ignore[type-arg]
 async def get_project(project_id: str) -> dict:  # type: ignore[type-arg]
     project = _get_project(project_id)
     return project.status_dict()
+
+
+@app.post("/api/projects/{project_id}/name")
+async def update_project_name(project_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    project.config.name = body.get("name", "").strip()
+    project.save()
+    return {"ok": True}
 
 
 @app.delete("/api/projects/{project_id}")
