@@ -10,7 +10,7 @@ from PIL import Image
 
 from src.dolphin.runner import read_game_id
 from src.logging import logger
-from src.web.sessions import ISO_CACHE_ROOT, Project, Task, TaskState
+from src.web.sessions import ISO_CACHE_ROOT, Project, Savestate, Task, TaskState
 
 # Limits.
 MAX_ISO_SIZE = 1_600_000_000  # 1.5 GB
@@ -65,15 +65,26 @@ def save_iso(project: Project, tmp_path: Path, size: int) -> dict[str, object]:
     return {"sha1": sha1, "game_id": game_id, "size": size}
 
 
-def save_savestate(task: Task, tmp_path: Path, size: int) -> dict[str, object]:
-    """Validate and persist an uploaded savestate to the task."""
+def save_savestate_to_project(
+    project: Project, tmp_path: Path, size: int, name: str = "",
+) -> Savestate:
+    """Validate and persist an uploaded savestate to the project."""
     if size > MAX_SAVESTATE_SIZE:
         raise ValueError(f"Savestate too large ({size:,} bytes, max {MAX_SAVESTATE_SIZE:,})")
 
-    shutil.move(str(tmp_path), str(task.savestate_path))
-    task.transition(TaskState.SAVESTATE_UPLOADED)
+    ss = project.create_savestate(name=name)
+    shutil.move(str(tmp_path), str(ss.savestate_path))
+    logger.info("savestate_uploaded", project=project.project_id, savestate=ss.savestate_id, size=size)
+    return ss
 
-    return {"ok": True}
+
+def save_screenshot_to_savestate(ss: Savestate, frame_path: Path) -> None:
+    """Normalize and cache a rendered frame as the savestate's screenshot."""
+    img = Image.open(frame_path)
+    if img.size != FRAME_SIZE:
+        img = img.resize(FRAME_SIZE, Image.LANCZOS)
+    img.convert("RGB").save(ss.screenshot_path, "PNG")
+    logger.info("screenshot_saved", savestate=ss.savestate_id)
 
 
 def save_screenshot(task: Task, tmp_path: Path, size: int) -> dict[str, object]:

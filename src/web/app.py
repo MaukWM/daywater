@@ -16,7 +16,7 @@ from src.ghidra.notes import NotesStore
 from src.web.events import stream_events
 from src.web.mask import save_mask
 from src.web.sessions import ProjectStore, TaskState
-from src.web.uploads import save_iso, save_reference_frame, save_savestate
+from src.web.uploads import save_iso, save_reference_frame, save_savestate_to_project
 
 app = FastAPI(title="Spectre", version="0.2.0")
 
@@ -178,14 +178,12 @@ async def get_task_status(project_id: str, task_id: str) -> dict:  # type: ignor
     return d
 
 
-# ── Task file uploads ────────────────────────────────────────────────── #
+# ── Savestate CRUD (project level) ───────────────────────────────────── #
 
 
-@app.post("/api/projects/{project_id}/tasks/{task_id}/upload/savestate")
-async def upload_savestate(project_id: str, task_id: str, file: UploadFile) -> dict:  # type: ignore[type-arg]
-    project, task = _get_task(project_id, task_id)
-    if task.state != TaskState.CREATED:
-        raise HTTPException(400, f"Cannot upload savestate in state {task.state}")
+@app.post("/api/projects/{project_id}/savestates/upload")
+async def upload_savestate(project_id: str, file: UploadFile, name: str = "") -> dict:  # type: ignore[type-arg]
+    project = _get_project(project_id)
 
     tmp = Path(tempfile.mktemp(suffix=".sav", prefix="spectre_upload_"))
     size = 0
@@ -195,11 +193,119 @@ async def upload_savestate(project_id: str, task_id: str, file: UploadFile) -> d
             size += len(chunk)
 
     try:
-        result = save_savestate(task, tmp, size)
+        ss = save_savestate_to_project(project, tmp, size, name=name)
     except ValueError as e:
         tmp.unlink(missing_ok=True)
         raise HTTPException(400, str(e))
+    return ss.status_dict()
+
+
+@app.get("/api/projects/{project_id}/savestates")
+async def list_savestates(project_id: str) -> list[dict]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    result = []
+    for cfg in project.list_savestates():
+        ss = project.get_savestate(cfg.savestate_id)
+        result.append({
+            "savestate_id": cfg.savestate_id,
+            "name": cfg.name,
+            "notes": cfg.notes,
+            "created_at": cfg.created_at,
+            "has_screenshot": ss.screenshot_path.exists() if ss else False,
+        })
     return result
+
+
+@app.get("/api/projects/{project_id}/savestates/{savestate_id}")
+async def get_savestate(project_id: str, savestate_id: str) -> dict:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    ss = project.get_savestate(savestate_id)
+    if ss is None:
+        raise HTTPException(404, f"Savestate {savestate_id} not found")
+    return ss.status_dict()
+
+
+@app.post("/api/projects/{project_id}/savestates/{savestate_id}/notes")
+async def update_savestate_notes(project_id: str, savestate_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    ss = project.get_savestate(savestate_id)
+    if ss is None:
+        raise HTTPException(404, f"Savestate {savestate_id} not found")
+    if "name" in body:
+        ss.config.name = body["name"]
+    if "notes" in body:
+        ss.config.notes = body["notes"]
+    ss.save()
+    return {"ok": True}
+
+
+@app.delete("/api/projects/{project_id}/savestates/{savestate_id}")
+async def delete_savestate(project_id: str, savestate_id: str) -> dict[str, bool]:
+    project = _get_project(project_id)
+    ss = project.get_savestate(savestate_id)
+    if ss is None:
+        raise HTTPException(404, f"Savestate {savestate_id} not found")
+    shutil.rmtree(ss.root, ignore_errors=True)
+    return {"ok": True}
+
+
+@app.post("/api/projects/{project_id}/savestates/{savestate_id}/render-screenshot")
+async def render_savestate_screenshot(project_id: str, savestate_id: str) -> dict:  # type: ignore[type-arg]
+    """Render a screenshot from a savestate by booting Dolphin. Caches the result."""
+    project = _get_project(project_id)
+    ss = project.get_savestate(savestate_id)
+    if ss is None:
+        raise HTTPException(404, f"Savestate {savestate_id} not found")
+    if not ss.savestate_path.exists():
+        raise HTTPException(404, "Savestate file missing")
+
+    from src.web.runner import run_capture_frame
+    from src.web.uploads import save_screenshot_to_savestate
+
+    frame_path = await run_capture_frame(ss.savestate_path, project.iso_path)
+    save_screenshot_to_savestate(ss, frame_path)
+    return {
+        "ok": True,
+        "screenshot_url": f"/api/projects/{project_id}/savestates/{savestate_id}/screenshot",
+    }
+
+
+@app.get("/api/projects/{project_id}/savestates/{savestate_id}/screenshot")
+async def get_savestate_screenshot(project_id: str, savestate_id: str) -> FileResponse:
+    """Serve the cached screenshot for a savestate."""
+    project = _get_project(project_id)
+    ss = project.get_savestate(savestate_id)
+    if ss is None:
+        raise HTTPException(404, f"Savestate {savestate_id} not found")
+    if not ss.screenshot_path.exists():
+        raise HTTPException(404, "No screenshot rendered yet — use render-screenshot first")
+    return FileResponse(ss.screenshot_path, media_type="image/png")
+
+
+# ── Task savestate selection ─────────────────────────────────────────── #
+
+
+@app.post("/api/projects/{project_id}/tasks/{task_id}/select-savestate")
+async def select_savestate(project_id: str, task_id: str, body: dict) -> dict:  # type: ignore[type-arg]
+    project, task = _get_task(project_id, task_id)
+    ss_id = body.get("savestate_id", "")
+    if not ss_id:
+        raise HTTPException(400, "savestate_id is required")
+    ss = project.get_savestate(ss_id)
+    if ss is None:
+        raise HTTPException(404, f"Savestate {ss_id} not found")
+
+    task.config.savestate_id = ss_id
+
+    # If the savestate has a rendered screenshot, copy it as the task's
+    # reference frame and skip straight to FRAME_READY.
+    if ss.screenshot_path.exists():
+        shutil.copy2(str(ss.screenshot_path), str(task.reference_path))
+        task.transition(TaskState.FRAME_READY)
+        return {"ok": True, "has_reference": True}
+
+    task.transition(TaskState.SAVESTATE_UPLOADED)
+    return {"ok": True, "has_reference": False}
 
 
 # ── Capture frame from Dolphin ───────────────────────────────────────── #
@@ -212,9 +318,13 @@ async def capture_frame(project_id: str, task_id: str) -> dict:  # type: ignore[
     if task.state not in (TaskState.SAVESTATE_UPLOADED, TaskState.FRAME_READY, TaskState.MASK_READY):
         raise HTTPException(400, f"Cannot capture in state {task.state}")
 
+    ss = project.get_savestate(task.config.savestate_id)
+    if ss is None:
+        raise HTTPException(400, "No savestate selected for this task")
+
     from src.web.runner import run_capture_frame
 
-    frame_path = await run_capture_frame(task, project.iso_path)
+    frame_path = await run_capture_frame(ss.savestate_path, project.iso_path)
     save_reference_frame(task, frame_path)
     return {"ok": True, "frame_url": f"/api/projects/{project_id}/tasks/{task_id}/files/reference.png"}
 

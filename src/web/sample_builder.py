@@ -113,6 +113,14 @@ def build_sample_from_task(task: Task, project: Project) -> Sample:
     )
 
 
+def _resolve_savestate_path(task: Task, project: Project) -> Path:
+    """Resolve the savestate path from a task's savestate_id."""
+    ss = project.get_savestate(task.config.savestate_id)
+    if ss is None:
+        raise ValueError(f"Savestate {task.config.savestate_id} not found in project")
+    return ss.savestate_path
+
+
 def _build_run_gecko_for_task(task: Task, project: Project):  # type: ignore[no-untyped-def]
     """Build the run_gecko tool bound to a project task's files."""
     import base64
@@ -125,6 +133,7 @@ def _build_run_gecko_for_task(task: Task, project: Project):  # type: ignore[no-
     from src.agent.state import BUDGET_KEY, LAST_PASS_KEY
 
     tcfg = task.config
+    savestate_path = _resolve_savestate_path(task, project)
 
     @tool
     def run_gecko() -> Tool:
@@ -162,7 +171,7 @@ def _build_run_gecko_for_task(task: Task, project: Project):  # type: ignore[no-
                     user_dir=user_dir,
                     iso=iso_path,
                     log_path=tmp_root / "dolphin.log",
-                    savestate=task.savestate_path,
+                    savestate=savestate_path,
                     run_seconds=tcfg.run_seconds,
                 )
                 frames_dir = tmp_root / "frames"
@@ -220,6 +229,7 @@ def _build_run_gecko_for_task(task: Task, project: Project):  # type: ignore[no-
 def web_scorer(task: Task, project: Project) -> Scorer:
     """Grade the agent's final submission for a web task."""
     tcfg = task.config
+    savestate_path = _resolve_savestate_path(task, project)
 
     async def score(state: InspectTaskState, target: Target) -> Score:
         gecko_text = state.output.completion or ""
@@ -251,7 +261,7 @@ def web_scorer(task: Task, project: Project) -> Scorer:
                 user_dir=user_dir,
                 iso=iso_path,
                 log_path=tmp_root / "dolphin.log",
-                savestate=task.savestate_path,
+                savestate=savestate_path,
                 run_seconds=tcfg.run_seconds,
             )
             frames_dir = tmp_root / "frames"

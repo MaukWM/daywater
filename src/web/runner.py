@@ -63,7 +63,7 @@ async def run_survey(project: Project) -> None:
             raise
 
 
-async def run_capture_frame(task: Task, iso_path: Path) -> Path:
+async def run_capture_frame(savestate_path: Path, iso_path: Path) -> Path:
     """Run Dolphin briefly from savestate to capture a reference frame."""
     from src.dolphin import collect_dump, load_png_frames, read_game_id, run_dolphin
     from src.dolphin.runner import write_user_dir
@@ -85,9 +85,9 @@ async def run_capture_frame(task: Task, iso_path: Path) -> Path:
             game_id = read_game_id(iso_path)
             write_user_dir(user_dir, game_id, [])  # no gecko codes
 
-            check_savestate_compatibility(task.savestate_path)
+            check_savestate_compatibility(savestate_path)
             args, uses_open_wrapper = _build_command(
-                user_dir, iso_path, savestate=task.savestate_path,
+                user_dir, iso_path, savestate=savestate_path,
                 video_backend="Software", hidden=True,
             )
             env = os.environ.copy()

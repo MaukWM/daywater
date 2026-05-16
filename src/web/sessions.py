@@ -31,7 +31,7 @@ class TaskState(StrEnum):
 
 
 _TASK_TRANSITIONS: dict[TaskState, set[TaskState]] = {
-    TaskState.CREATED: {TaskState.SAVESTATE_UPLOADED, TaskState.READY},
+    TaskState.CREATED: {TaskState.SAVESTATE_UPLOADED, TaskState.FRAME_READY, TaskState.READY},
     TaskState.SAVESTATE_UPLOADED: {TaskState.FRAME_READY},
     TaskState.FRAME_READY: {TaskState.FRAME_READY, TaskState.MASK_READY},
     TaskState.MASK_READY: {TaskState.FRAME_READY, TaskState.READY},
@@ -65,6 +65,16 @@ class ProjectConfig:
 
 
 @dataclass
+class SavestateConfig:
+    """Persisted savestate metadata (project-level, shared across tasks)."""
+
+    savestate_id: str
+    name: str = ""
+    notes: str = ""
+    created_at: float = field(default_factory=time.time)
+
+
+@dataclass
 class TaskConfig:
     """Persisted task metadata (one agent run within a project)."""
 
@@ -72,6 +82,9 @@ class TaskConfig:
     task_type: str = "hud_detection"
     state: TaskState = TaskState.CREATED
     created_at: float = field(default_factory=time.time)
+
+    # Reference to a project-level savestate.
+    savestate_id: str = ""
 
     # Agent config (editable before run).
     run_seconds: int = 10
@@ -104,10 +117,6 @@ class Task:
     @property
     def state(self) -> TaskState:
         return self.config.state
-
-    @property
-    def savestate_path(self) -> Path:
-        return self.root / "savestate.sav"
 
     @property
     def reference_path(self) -> Path:
@@ -151,9 +160,45 @@ class Task:
 
     def status_dict(self) -> dict[str, Any]:
         d = asdict(self.config)
-        d["has_savestate"] = self.savestate_path.exists()
+        d["has_savestate"] = bool(self.config.savestate_id)
         d["has_reference"] = self.reference_path.exists()
         d["has_mask"] = self.mask_path.exists()
+        return d
+
+
+# ── Savestate ──────────────────────────────────────────────────────────── #
+
+
+class Savestate:
+    """Manages one project-level savestate directory."""
+
+    def __init__(self, root: Path, config: SavestateConfig) -> None:
+        self.root = root
+        self.config = config
+
+    @property
+    def savestate_id(self) -> str:
+        return self.config.savestate_id
+
+    @property
+    def savestate_path(self) -> Path:
+        return self.root / "savestate.sav"
+
+    @property
+    def screenshot_path(self) -> Path:
+        return self.root / "screenshot.png"
+
+    @property
+    def config_path(self) -> Path:
+        return self.root / "config.json"
+
+    def save(self) -> None:
+        self.config_path.write_text(json.dumps(asdict(self.config), indent=2))
+
+    def status_dict(self) -> dict[str, Any]:
+        d = asdict(self.config)
+        d["has_file"] = self.savestate_path.exists()
+        d["has_screenshot"] = self.screenshot_path.exists()
         return d
 
 
@@ -203,6 +248,42 @@ class Project:
         d = asdict(self.config)
         d["task_count"] = len(list(self.tasks_dir.iterdir())) if self.tasks_dir.exists() else 0
         return d
+
+    @property
+    def savestates_dir(self) -> Path:
+        return self.root / "savestates"
+
+    # ── Savestate management ─────────────────────────────────────────── #
+
+    def create_savestate(self, name: str = "") -> Savestate:
+        self.savestates_dir.mkdir(parents=True, exist_ok=True)
+        sid = uuid.uuid4().hex[:8]
+        ss_dir = self.savestates_dir / sid
+        ss_dir.mkdir()
+        config = SavestateConfig(savestate_id=sid, name=name)
+        ss = Savestate(ss_dir, config)
+        ss.save()
+        logger.info("savestate_created", project=self.project_id, savestate=sid)
+        return ss
+
+    def get_savestate(self, savestate_id: str) -> Savestate | None:
+        ss_dir = self.savestates_dir / savestate_id
+        config_path = ss_dir / "config.json"
+        if not config_path.exists():
+            return None
+        raw = json.loads(config_path.read_text())
+        return Savestate(ss_dir, SavestateConfig(**raw))
+
+    def list_savestates(self) -> list[SavestateConfig]:
+        if not self.savestates_dir.exists():
+            return []
+        savestates = []
+        for d in sorted(self.savestates_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+            cfg = d / "config.json"
+            if cfg.exists():
+                raw = json.loads(cfg.read_text())
+                savestates.append(SavestateConfig(**raw))
+        return savestates
 
     # ── Task management ───────────────────────────────────────────────── #
 

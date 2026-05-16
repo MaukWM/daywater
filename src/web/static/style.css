@@ -226,25 +226,78 @@ main {
   background: var(--surface);
 }
 
-.project-info .row {
+.project-info .row,
+.info-box .row {
   display: flex;
   gap: 2rem;
   margin-bottom: 0.3rem;
   font-size: 0.85rem;
+  align-items: center;
 }
 
-.project-info .label {
+.project-info .label,
+.info-box .label {
   color: var(--text-dim);
   min-width: 100px;
 }
 
-.project-info .value {
+.project-info .value,
+.info-box .value {
   color: var(--text);
 }
 
 .project-info .value.green {
   color: var(--green);
 }
+
+/* ── Savestate list ──────────────────────────────────────────────────── */
+
+.savestate-list {
+  list-style: none;
+}
+
+.savestate-list li {
+  border: 1px solid var(--border);
+  padding: 0.7rem 1rem;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.85rem;
+}
+
+.savestate-list li:hover {
+  background: var(--surface-hover);
+}
+
+.savestate-list .cursor {
+  color: var(--green);
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.savestate-list li:hover .cursor {
+  opacity: 1;
+}
+
+.savestate-list li:hover .delete-btn {
+  opacity: 1;
+}
+
+.savestate-list .task-type {
+  color: var(--amber);
+  min-width: 120px;
+}
+
+.savestate-list .meta {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  flex: 1;
+}
+
+/* ── Task list ──────────────────────────────────────────────────────── */
 
 .task-list {
   list-style: none;
@@ -358,7 +411,9 @@ input[type="file"] {
   color: var(--text);
 }
 
+input[type="text"],
 input[type="number"],
+select,
 textarea {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -369,8 +424,17 @@ textarea {
   width: 100%;
 }
 
+input[type="text"] {
+  width: auto;
+}
+
 input[type="number"] {
   width: 80px;
+}
+
+select {
+  width: auto;
+  cursor: pointer;
 }
 
 textarea {
@@ -378,6 +442,7 @@ textarea {
 }
 
 input:focus,
+select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--green-dim);
