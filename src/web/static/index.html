@@ -8,8 +8,22 @@
 </head>
 <body>
   <header>
-    <h1>SPECTRE</h1>
-    <p class="subtitle">gamecube reverse engineering platform</p>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div>
+        <h1>SPECTRE</h1>
+        <p class="subtitle">gamecube reverse engineering platform</p>
+      </div>
+      <div style="position:relative;">
+        <button onclick="toggleProcessPanel()" id="proc-toggle-btn" style="font-size:0.72rem; padding:0.3rem 0.6rem;">Dolphin Processes</button>
+        <div id="proc-panel" hidden style="position:absolute; right:0; top:100%; margin-top:0.5rem; width:420px; background:var(--surface); border:1px solid var(--border); padding:0.75rem; z-index:100; box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+          <div id="proc-list" style="font-size:0.78rem; max-height:300px; overflow-y:auto;"></div>
+          <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+            <button onclick="refreshProcesses()" style="font-size:0.72rem; padding:0.2rem 0.5rem;">Refresh</button>
+            <button onclick="killAllDolphins()" class="danger" style="font-size:0.72rem; padding:0.2rem 0.5rem;">Kill All</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </header>
 
   <main>
@@ -346,6 +360,7 @@
             </div>
             <div id="kb-summary" style="padding:0.4rem 0; font-size:0.8rem; color:var(--text-dim);"></div>
           </div>
+
         </div>
       </div>
     </div>
@@ -1473,6 +1488,8 @@
       if (el.hidden) {
         el.hidden = false;
         if (icon) icon.textContent = '−';
+        // Auto-refresh process list when opening
+        if (id === 'proc-content') refreshProcesses();
       } else {
         el.hidden = true;
         if (icon) icon.textContent = '+';
@@ -1540,6 +1557,58 @@
         await api('POST', `/api/projects/${currentProjectId}/controller-mapping`, mapping);
       } catch (e) {
         alert('Failed to save mapping: ' + e.message);
+      }
+    }
+
+    // ── Process monitor (global, in header) ────────────────────────── //
+
+    function toggleProcessPanel() {
+      const panel = document.getElementById('proc-panel');
+      if (panel.hidden) {
+        panel.hidden = false;
+        refreshProcesses();
+      } else {
+        panel.hidden = true;
+      }
+    }
+
+    async function refreshProcesses() {
+      const el = document.getElementById('proc-list');
+      try {
+        const procs = await api('GET', '/api/processes');
+        if (!procs.length) {
+          el.innerHTML = '<span style="color:var(--text-dim);">No Dolphin processes running.</span>';
+          return;
+        }
+        el.innerHTML = `<table class="kb-table"><tr><th>PID</th><th>Age</th><th>RAM</th><th>User Dir</th><th></th></tr>` +
+          procs.map(p => `<tr>
+            <td style="font-family:monospace;">${p.pid}</td>
+            <td>${p.age_human}</td>
+            <td>${p.rss_mb} MB</td>
+            <td style="font-size:0.68rem; color:var(--text-dim); max-width:200px; overflow:hidden; text-overflow:ellipsis;">${p.user_dir}</td>
+            <td><button class="danger" style="padding:0.1rem 0.4rem; font-size:0.65rem;" onclick="killDolphin(${p.pid})">kill</button></td>
+          </tr>`).join('') + '</table>';
+      } catch (e) {
+        el.innerHTML = '<span style="color:var(--red);">Failed to load processes.</span>';
+      }
+    }
+
+    async function killDolphin(pid) {
+      try {
+        await api('POST', `/api/processes/${pid}/kill`);
+        refreshProcesses();
+      } catch (e) {
+        alert('Kill failed: ' + e.message);
+      }
+    }
+
+    async function killAllDolphins() {
+      if (!confirm('Kill all running Dolphin processes?')) return;
+      try {
+        await api('POST', '/api/processes/kill-all');
+        refreshProcesses();
+      } catch (e) {
+        alert('Kill all failed: ' + e.message);
       }
     }
 
