@@ -46,6 +46,7 @@ def survey_and_analyze(
     extract_root: Path,
     *,
     extras: list[Path] | None = None,
+    on_progress: object | None = None,
 ) -> list[BinaryCandidate]:
     """Extract + Ghidra-analyze every executable in the ISO.
 
@@ -72,6 +73,18 @@ def survey_and_analyze(
     out: list[BinaryCandidate] = []
     seen_sha: set[str] = set()
 
+    def _progress(done: int, total: int, label: str) -> None:
+        if callable(on_progress):
+            on_progress(done, total, label)
+
+    # Count total candidates first for progress reporting
+    fst_candidates = [f for f in list_iso_files(iso_path) if is_executable_candidate(f.path)]
+    total_candidates = 1 + len(fst_candidates) + len(extras or [])  # boot.dol + fst + extras
+    analyzed_count = 0
+
+    # Report total upfront so the UI shows "0/N" instead of "0/?"
+    _progress(0, total_candidates, "starting...")
+
     # 1. boot.dol from the ISO header.
     dol_path = extract_root / "boot.dol"
     try:
@@ -92,9 +105,10 @@ def survey_and_analyze(
             )
     except Exception as exc:  # noqa: BLE001
         logger.warning("survey_dol_failed", error=str(exc))
+    analyzed_count += 1
+    _progress(analyzed_count, total_candidates, "boot.dol")
 
-    # 2 + 3. Disc-filesystem candidates.
-    fst_candidates = [f for f in list_iso_files(iso_path) if is_executable_candidate(f.path)]
+    # 2 + 3. Disc-filesystem candidates (already counted above).
     elfs = sorted(
         [f for f in fst_candidates if f.path.lower().endswith((".elf", ".dol"))],
         key=lambda f: f.size,
@@ -119,7 +133,11 @@ def survey_and_analyze(
             res = run_analysis(target)
         except Exception as exc:  # noqa: BLE001
             logger.warning("survey_candidate_failed", path=f.path, error=str(exc))
+            analyzed_count += 1
+            _progress(analyzed_count, total_candidates, f.path)
             continue
+        analyzed_count += 1
+        _progress(analyzed_count, total_candidates, f.path)
         if res.sha1 in seen_sha:
             continue
         seen_sha.add(res.sha1)
@@ -146,7 +164,11 @@ def survey_and_analyze(
             res = run_analysis(p)
         except Exception as exc:  # noqa: BLE001
             logger.warning("survey_extra_failed", path=str(p), error=str(exc))
+            analyzed_count += 1
+            _progress(analyzed_count, total_candidates, p.name)
             continue
+        analyzed_count += 1
+        _progress(analyzed_count, total_candidates, p.name)
         if res.sha1 in seen_sha:
             continue
         seen_sha.add(res.sha1)

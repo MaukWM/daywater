@@ -35,12 +35,24 @@ async def run_survey(project: Project) -> None:
     async with _run_lock:
         try:
             loop = asyncio.get_event_loop()
-            inventory = await loop.run_in_executor(
-                _executor,
-                survey_and_analyze,
-                iso_path,
-                extract_root,
-            )
+
+            def _on_progress(done: int, total: int, label: str) -> None:
+                project.config.survey_binaries_done = done
+                project.config.survey_binaries_total = total
+                project.save()
+                project.append_event({
+                    "t": "survey_progress",
+                    "done": done,
+                    "total": total,
+                    "label": label,
+                })
+
+            def _run_survey() -> list:  # type: ignore[type-arg]
+                return survey_and_analyze(
+                    iso_path, extract_root, on_progress=_on_progress,
+                )
+
+            inventory = await loop.run_in_executor(_executor, _run_survey)
 
             project.config.inventory_text = format_inventory(inventory)
             project.config.survey_binaries_done = len(inventory)

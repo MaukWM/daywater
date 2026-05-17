@@ -53,6 +53,15 @@ RUN curl -fsSL "$GCL_URL" -o /tmp/gcl.zip \
 ENV DAYWATER_GHIDRA_HOME=/opt/ghidra
 ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 
+# Pre-compile Ghidra SLEIGH processor specs (required for analysis).
+# Without this, first-run analysis fails with "language probably did not compile properly".
+# Must also compile GameCubeLoader's custom Gekko/Broadway language spec.
+RUN /opt/ghidra/support/sleigh -a /opt/ghidra/Ghidra/Processors \
+    && /opt/ghidra/support/sleigh \
+       /opt/ghidra/Ghidra/Extensions/GameCubeLoader/data/languages/ppc_gekko_broadway.slaspec \
+       /opt/ghidra/Ghidra/Extensions/GameCubeLoader/data/languages/ppc_gekko_broadway.sla \
+    && chmod -R a+rX /opt/ghidra
+
 # Dolphin + other game binaries live in /usr/games on Debian/Ubuntu
 ENV PATH="/usr/games:$PATH"
 

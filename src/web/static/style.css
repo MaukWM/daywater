@@ -1276,6 +1276,22 @@ button.danger:hover:not(:disabled) {
   }
 }
 
+.spinner-inline {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--border);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+  margin-right: 0.3rem;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ── New Task Creator ──────────────────────────────────────────────── */
 
 #view-new-task.active {

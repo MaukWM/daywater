@@ -723,7 +723,7 @@
         const info = document.getElementById('project-info');
         const surveyText = p.survey_complete
           ? `<span class="proj-tag green">${p.survey_binaries_done} binaries</span>`
-          : `<span class="proj-tag amber">${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}...</span>`;
+          : `<span class="proj-tag amber">analyzing ${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}</span>`;
 
         const displayName = p.name || p.game_id;
         info.innerHTML = `
@@ -971,20 +971,28 @@
     async function pollProjectSurvey() {
       const surveyEl = document.getElementById('project-survey-status');
       surveyEl.hidden = false;
-      surveyEl.textContent = 'ghidra binary analysis running...';
+      surveyEl.innerHTML = '<span class="spinner-inline"></span> Ghidra binary analysis starting...';
 
       const poll = async () => {
         if (!currentProjectId) return;
         try {
           const p = await api('GET', `/api/projects/${currentProjectId}`);
           if (p.survey_complete) {
-            surveyEl.textContent = `analysis complete: ${p.survey_binaries_done} binaries`;
+            surveyEl.innerHTML = `<span style="color:var(--green);">analysis complete: ${p.survey_binaries_done} binaries analyzed</span>`;
             surveyEl.classList.add('success');
-            // Refresh project view to update info box.
             loadProject();
             return;
           }
-          surveyEl.textContent = `analyzing binaries... (${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'})`;
+          const done = p.survey_binaries_done || 0;
+          const total = p.survey_binaries_total || '?';
+          const pct = total !== '?' && total > 0 ? Math.round((done / total) * 100) : 0;
+          surveyEl.innerHTML = `
+            <span class="spinner-inline"></span>
+            Analyzing binaries: ${done}/${total}
+            ${total !== '?' ? `<span style="display:inline-block; width:80px; height:4px; background:var(--border); margin-left:0.5rem; vertical-align:middle; border-radius:2px;">
+              <span style="display:block; width:${pct}%; height:100%; background:var(--green); border-radius:2px; transition:width 0.3s;"></span>
+            </span> ${pct}%` : ''}
+          `;
           setTimeout(poll, 2000);
         } catch {
           setTimeout(poll, 3000);
