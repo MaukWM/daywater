@@ -20,6 +20,44 @@ from src.web.uploads import save_iso, save_reference_frame, save_savestate_to_pr
 
 app = FastAPI(title="Daywater", version="0.2.0")
 
+
+# ── Settings persistence ──────────────────────────────────────────────── #
+
+_SETTINGS_PATH = Path("/app/sessions/.daywater_settings.json") if Path("/app/sessions").exists() else Path("./sessions/.daywater_settings.json")
+
+
+def _load_settings() -> dict[str, str]:
+    import json
+
+    if _SETTINGS_PATH.exists():
+        try:
+            return json.loads(_SETTINGS_PATH.read_text())
+        except (json.JSONDecodeError, ValueError):
+            pass
+    return {}
+
+
+def _save_settings(settings: dict[str, str]) -> None:
+    import json
+
+    _SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _SETTINGS_PATH.write_text(json.dumps(settings, indent=2))
+
+
+def _apply_settings_to_env() -> None:
+    """Load stored settings into environment variables on startup."""
+    import os
+
+    settings = _load_settings()
+    if settings.get("openai_api_key"):
+        os.environ["OPENAI_API_KEY"] = settings["openai_api_key"]
+    if settings.get("model"):
+        os.environ["INSPECT_EVAL_MODEL"] = settings["model"]
+
+
+# Apply on import (app startup)
+_apply_settings_to_env()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -828,6 +866,50 @@ async def get_knowledge(project_id: str) -> dict:  # type: ignore[type-arg]
                 })
 
     return {"findings": findings, "renames": renames, "notes": notes}
+
+
+# ── Settings ───────────────────────────────────────────────────────── #
+
+
+@app.get("/api/settings")
+async def get_settings() -> dict:  # type: ignore[type-arg]
+    """Return current settings (API key is masked)."""
+    settings = _load_settings()
+    key = settings.get("openai_api_key", "")
+    return {
+        "openai_api_key_set": bool(key),
+        "openai_api_key_preview": f"...{key[-6:]}" if len(key) > 6 else ("***" if key else ""),
+        "model": settings.get("model", ""),
+    }
+
+
+@app.post("/api/settings")
+async def update_settings(body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    """Update settings. Applies immediately to environment."""
+    import os
+
+    settings = _load_settings()
+
+    if "openai_api_key" in body:
+        key = body["openai_api_key"].strip()
+        if key:
+            settings["openai_api_key"] = key
+            os.environ["OPENAI_API_KEY"] = key
+        else:
+            settings.pop("openai_api_key", None)
+            os.environ.pop("OPENAI_API_KEY", None)
+
+    if "model" in body:
+        model = body["model"].strip()
+        if model:
+            settings["model"] = model
+            os.environ["INSPECT_EVAL_MODEL"] = model
+        else:
+            settings.pop("model", None)
+            os.environ.pop("INSPECT_EVAL_MODEL", None)
+
+    _save_settings(settings)
+    return {"ok": True}
 
 
 # ── Process monitor ────────────────────────────────────────────────── #
