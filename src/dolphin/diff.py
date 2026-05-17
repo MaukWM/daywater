@@ -95,3 +95,61 @@ def fmt_stats(s: Mapping[str, float]) -> str:
         f"mean={s['mean']:6.2f}  p99={s['p99']:6.2f}  max={s['max']:6.2f}  "
         f"changed%={s['pct_pixels_changed']:5.2f}"
     )
+
+
+def has_render_glitch(
+    img: ImageArray,
+    *,
+    black_threshold: int = 10,
+    min_block_ratio: float = 0.05,
+    min_block_rows: int = 10,
+) -> bool:
+    """Detect render glitches: large contiguous black rectangles.
+
+    Scans for runs of consecutive fully-black rows (all pixels below
+    ``black_threshold``). If any such block covers >= ``min_block_ratio``
+    of the total frame area, returns True.
+
+    This avoids false positives on dark game scenes — those have texture
+    variation, shadows, and ambient light. A render glitch is a solid
+    block of pure black from an incomplete compositor pass.
+
+    Args:
+        img: Frame as (H, W, 3) uint8 array.
+        black_threshold: Per-channel ceiling to count as black.
+        min_block_ratio: Fraction of total pixels the black block must
+            cover to be flagged (default 15%).
+        min_block_rows: Minimum consecutive black rows to count as a
+            block (ignore tiny bands < this many rows).
+    """
+    h, w = img.shape[:2]
+    total_pixels = h * w
+
+    # For each row, check if ALL pixels are near-black
+    # A pixel is near-black if max(R,G,B) < threshold
+    row_max = img.max(axis=(1, 2))  # shape (H,) — brightest channel per row
+    black_rows = row_max < black_threshold  # bool array, True = entirely black row
+
+    # Find contiguous runs of black rows
+    largest_block_pixels = 0
+    run_start = None
+    for i in range(h):
+        if black_rows[i]:
+            if run_start is None:
+                run_start = i
+        else:
+            if run_start is not None:
+                run_len = i - run_start
+                if run_len >= min_block_rows:
+                    block_pixels = run_len * w
+                    largest_block_pixels = max(largest_block_pixels, block_pixels)
+                run_start = None
+
+    # Handle run that extends to bottom of frame
+    if run_start is not None:
+        run_len = h - run_start
+        if run_len >= min_block_rows:
+            block_pixels = run_len * w
+            largest_block_pixels = max(largest_block_pixels, block_pixels)
+
+    return (largest_block_pixels / total_pixels) >= min_block_ratio

@@ -1,20 +1,22 @@
 """Agent tools for per-project research documents.
 
-Gives the agent a research journal scoped to the project directory.
-The agent can create, read, and update free-form markdown documents
-and maintains its own INDEX.md as a table of contents.
+Each doc has metadata (summary, source task, timestamp) stored in
+.research_meta.json. The index is auto-generated from these summaries —
+the agent never writes INDEX.md directly.
 
 Storage layout::
 
     <project_root>/research/
-    ├── INDEX.md          # table of contents (always shown to agent)
-    ├── npc-behaviour.md  # agent-created research doc
-    ├── shooting.md       # agent-created research doc
+    ├── .research_meta.json   # {filename: {summary, task_id, created_at}}
+    ├── npc-behaviour.md      # agent-created research doc
+    ├── shooting.md           # agent-created research doc
     └── ...
 """
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 
 from inspect_ai.tool import Tool, tool
@@ -26,11 +28,89 @@ def _research_dir(project_root: Path) -> Path:
     return d
 
 
-def _ensure_index(research_dir: Path) -> Path:
-    index = research_dir / "INDEX.md"
-    if not index.exists():
-        index.write_text("# Research Index\n\nNo research yet.\n")
-    return index
+def _meta_path(research_dir: Path) -> Path:
+    return research_dir / ".research_meta.json"
+
+
+def _load_meta(research_dir: Path) -> dict[str, dict[str, str | float]]:
+    """Load research doc metadata. Returns {filename: {summary, task_id, created_at}}."""
+    path = _meta_path(research_dir)
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text())
+    except (json.JSONDecodeError, ValueError):
+        return {}
+
+
+def _save_meta(research_dir: Path, meta: dict[str, dict[str, str | float]]) -> None:
+    _meta_path(research_dir).write_text(json.dumps(meta, indent=2))
+
+
+def build_index(project_root: Path) -> str:
+    """Build the research index from doc metadata. Used by agent + frontend."""
+    rd = _research_dir(project_root)
+    meta = _load_meta(rd)
+
+    # Also pick up orphan docs (created before metadata tracking)
+    on_disk = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
+
+    if not on_disk and not meta:
+        return "# Research Index\n\nNo research documents yet."
+
+    lines = ["# Research Index\n"]
+    for filename in on_disk:
+        entry = meta.get(filename, {})
+        summary = entry.get("summary", "(no summary)")
+        lines.append(f"- **{filename}** — {summary}")
+
+    return "\n".join(lines)
+
+
+def list_docs(project_root: Path) -> list[dict[str, str]]:
+    """Return structured doc list for the frontend."""
+    rd = _research_dir(project_root)
+    meta = _load_meta(rd)
+    on_disk = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
+
+    result = []
+    for filename in on_disk:
+        entry = meta.get(filename, {})
+        result.append({
+            "filename": filename,
+            "summary": str(entry.get("summary", "")),
+            "task_id": str(entry.get("task_id", "")),
+            "created_at": float(entry.get("created_at", 0)),
+        })
+    return result
+
+
+def get_research_docs_for_task(project_root: Path, task_id: str) -> list[str]:
+    """Return filenames of research docs created by a specific task."""
+    rd = _research_dir(project_root)
+    meta = _load_meta(rd)
+    return [fn for fn, entry in meta.items() if entry.get("task_id") == task_id]
+
+
+def remove_research_docs_for_task(project_root: Path, task_id: str) -> list[str]:
+    """Delete all research docs created by a specific task. Returns deleted filenames."""
+    rd = _research_dir(project_root)
+    meta = _load_meta(rd)
+
+    deleted = []
+    for fn in list(meta.keys()):
+        if meta[fn].get("task_id") == task_id:
+            doc_path = rd / fn
+            if doc_path.exists():
+                doc_path.unlink()
+                deleted.append(fn)
+            del meta[fn]
+
+    _save_meta(rd, meta)
+    return deleted
+
+
+# ── Agent tools ──────────────────────────────────────────────────────── #
 
 
 @tool
@@ -40,21 +120,11 @@ def list_research(project_root: Path) -> Tool:
     async def execute() -> str:
         """Read the research index for this game.
 
-        Returns the contents of INDEX.md, which is the table of contents
-        for all research documents. Always check this at the start of a
-        run to see what prior tasks have already documented.
+        Returns an auto-generated index of all research documents with
+        their summaries. Always check this at the start of a run to see
+        what prior tasks have already documented.
         """
-        rd = _research_dir(project_root)
-        index = _ensure_index(rd)
-        content = index.read_text()
-
-        # Also list files so agent knows what's available
-        docs = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
-        if docs:
-            content += "\n\n## Available documents\n\n"
-            content += "\n".join(f"- {name}" for name in docs)
-
-        return content
+        return build_index(project_root)
 
     return execute
 
@@ -77,7 +147,7 @@ def read_research(project_root: Path) -> Tool:
         path = rd / filename
 
         if not path.exists():
-            available = sorted(p.name for p in rd.glob("*.md"))
+            available = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
             return f"Document '{filename}' not found. Available: {', '.join(available) or 'none'}"
 
         # Prevent path traversal
@@ -90,11 +160,11 @@ def read_research(project_root: Path) -> Tool:
 
 
 @tool
-def write_research(project_root: Path) -> Tool:
+def write_research(project_root: Path, task_id: str = "") -> Tool:
     """Build the ``write_research`` tool bound to a project directory."""
 
-    async def execute(filename: str, content: str) -> str:
-        """Write or update a research document and update the index.
+    async def execute(filename: str, content: str, summary: str = "") -> str:
+        """Write or update a research document.
 
         Use this to document your findings about game systems, code
         structure, function purposes, and anything that would help
@@ -102,17 +172,27 @@ def write_research(project_root: Path) -> Tool:
         documenting discoveries — include addresses, function names,
         your reasoning, and what you confirmed vs what's hypothetical.
 
-        The INDEX.md is yours to manage. After writing a new doc,
-        update the index by writing to "INDEX.md" with an updated
-        table of contents.
+        The index is auto-generated from document summaries, so you
+        do NOT need to write INDEX.md. Just provide a good summary.
 
         Args:
             filename: Name for the document (e.g. "npc-behaviour.md",
-                "shooting-mechanics.md", "INDEX.md"). Must end in .md.
+                "shooting-mechanics.md"). Must end in .md. Cannot be
+                "INDEX.md" (the index is auto-generated).
             content: Full markdown content for the document.
+            summary: One-line summary of what this document covers.
+                This appears in the research index shown to future tasks.
+                Keep it concise and informative.
         """
         if not filename.endswith(".md"):
             filename += ".md"
+
+        if filename.lower() == "index.md":
+            return (
+                "Error: INDEX.md is auto-generated from document summaries. "
+                "Write your research to a named document instead (e.g. "
+                "'player-movement.md') and provide a summary."
+            )
 
         rd = _research_dir(project_root)
         path = rd / filename
@@ -124,9 +204,18 @@ def write_research(project_root: Path) -> Tool:
         if not content.strip():
             return "Error: content is empty."
 
-        _ensure_index(rd)
         path.write_text(content)
 
-        return f"Written: research/{filename} ({len(content)} bytes)"
+        # Update metadata
+        meta = _load_meta(rd)
+        existing = meta.get(filename, {})
+        meta[filename] = {
+            "summary": summary.strip() or str(existing.get("summary", "")),
+            "task_id": task_id or str(existing.get("task_id", "")),
+            "created_at": float(existing.get("created_at", 0)) or time.time(),
+        }
+        _save_meta(rd, meta)
+
+        return f"Written: research/{filename} ({len(content)} bytes). Summary: {summary or '(unchanged)'}"
 
     return execute

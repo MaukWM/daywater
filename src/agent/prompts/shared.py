@@ -72,15 +72,17 @@ TOOLS_FINDINGS = """\
 TOOLS_RESEARCH = """\
 ### Research journal (free, persists across tasks)
 
-- `list_research()` — read the research INDEX.md + list of available \
-  docs. **Call this at the start of your run** to see what prior tasks \
-  have documented — it may save you significant RE effort.
+- `list_research()` — read the auto-generated research index with \
+  summaries of all available docs. **Call this at the start of your run** \
+  to see what prior tasks have documented — it may save you RE effort.
 - `read_research(filename)` — read a specific research document.
-- `write_research(filename, content)` — write or update a research \
-  document. Use this to document game systems, code structure, function \
-  maps, and anything that helps future tasks. Write like a researcher: \
-  include addresses, function names, reasoning, and what's confirmed \
-  vs hypothetical. You own the INDEX.md — update it when you add docs."""
+- `write_research(filename, content, summary)` — write or update a \
+  research document. Use this to document game systems, code structure, \
+  function maps, and anything that helps future tasks. Write like a \
+  researcher: include addresses, function names, reasoning, and what's \
+  confirmed vs hypothetical. **Provide a one-line summary** — it appears \
+  in the index shown to future tasks. Do NOT write to INDEX.md (it's \
+  auto-generated from summaries)."""
 
 WORKFLOW_TOP_DOWN = """\
 ## Suggested workflow — TOP-DOWN, NOT BOTTOM-UP
@@ -124,11 +126,11 @@ Before submitting your final answer, **document what you learned**:
 1. **Save structured findings** via `save_finding` — every function \
    you identified (kind="function"), memory addresses (kind="address"), \
    and key observations (kind="note").
-2. **Write a research doc** via `write_research` — a short document \
-   summarizing your analysis: what you explored, what the call graph \
-   looks like, what you tried and why it worked or didn't, and what \
-   questions remain. Then update INDEX.md. \
-   Think of this as a handoff note to the next researcher.
+2. **Write a research doc** via `write_research(filename, content, summary)` \
+   — a document summarizing your analysis: what you explored, what the \
+   call graph looks like, what you tried and why it worked or didn't, \
+   and what questions remain. Include a concise summary — it appears in \
+   the auto-generated index for future tasks.
 
 This ensures future tasks on this game can build on your work \
 instead of re-discovering the same things."""

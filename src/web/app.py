@@ -178,36 +178,116 @@ async def update_controller_mapping(project_id: str, body: dict) -> dict[str, bo
 # ── Task CRUD ────────────────────────────────────────────────────────── #
 
 
+@app.get("/api/presets")
+async def list_presets() -> list[dict]:  # type: ignore[type-arg]
+    """List available task presets with their job specs."""
+    from src.agent.presets import PRESET_DESCRIPTIONS, PRESETS
+
+    return [
+        {
+            "name": name,
+            "description": PRESET_DESCRIPTIONS.get(name, ""),
+            "job_spec": spec.to_dict(),
+        }
+        for name, spec in PRESETS.items()
+    ]
+
+
 @app.post("/api/projects/{project_id}/tasks")
 async def create_task(project_id: str, body: dict | None = None) -> dict[str, str]:  # type: ignore[type-arg]
     project = _get_project(project_id)
     if not project.config.game_id:
         raise HTTPException(400, "Upload an ISO first")
-    task_type = (body or {}).get("type", "hud_detection")
-    task = project.create_task(task_type=task_type)
-    return {"task_id": task.task_id, "task_type": task_type}
+
+    body = body or {}
+
+    # Three ways to create a task: preset name, full job_spec, or legacy type
+    if "preset" in body:
+        task = project.create_task(preset=body["preset"])
+    elif "job_spec" in body:
+        task = project.create_task(job_spec_dict=body["job_spec"])
+    elif "type" in body:
+        # Legacy support
+        task = project.create_task(task_type=body["type"])
+    else:
+        task = project.create_task(preset="hud_removal")
+
+    spec = task.config.get_job_spec()
+    return {
+        "task_id": task.task_id,
+        "preset": task.config.preset_name,
+        "goal_type": spec.goal_type.value,
+        "needs_savestate": str(spec.needs_savestate).lower(),
+        "needs_mask": str(spec.needs_mask).lower(),
+    }
 
 
 @app.get("/api/projects/{project_id}/tasks")
 async def list_tasks(project_id: str) -> list[dict]:  # type: ignore[type-arg]
     project = _get_project(project_id)
-    return [
-        {
+    result = []
+    for t in project.list_tasks():
+        spec = t.get_job_spec()
+        result.append({
             "task_id": t.task_id,
-            "task_type": t.task_type,
+            "preset": t.preset_name,
+            "goal_type": spec.goal_type.value,
             "state": t.state,
             "result_verdict": t.result_verdict,
             "created_at": t.created_at,
-        }
-        for t in project.list_tasks()
-    ]
+        })
+    return result
 
 
 @app.delete("/api/projects/{project_id}/tasks/{task_id}")
-async def delete_task(project_id: str, task_id: str) -> dict[str, bool]:
+async def delete_task(project_id: str, task_id: str) -> dict:  # type: ignore[type-arg]
     project, task = _get_task(project_id, task_id)
+
+    # Clean up findings created by this task (project-level)
+    fs = FindingsStore.load(project.root)
+    removed_findings = [f for f in fs.findings if f.source_task == task_id]
+    for f in removed_findings:
+        fs.remove(f.id)
+
+    # Clean up savestate findings created by this task
+    if task.config.savestate_id:
+        ss = project.get_savestate(task.config.savestate_id)
+        if ss is not None:
+            ss_fs = FindingsStore.load(ss.root)
+            ss_removed = [f for f in ss_fs.findings if f.source_task == task_id]
+            for f in ss_removed:
+                ss_fs.remove(f.id)
+
+    # Clean up research docs created by this task
+    from src.agent.research_tools import remove_research_docs_for_task
+
+    removed_docs = remove_research_docs_for_task(project.root, task_id)
+
+    # Clean up Ghidra renames/notes created by this task
+    cache_root = Path("cache/binaries")
+    if not cache_root.exists():
+        cache_root = Path("/app/cache/binaries")
+    removed_renames = 0
+    removed_notes = 0
+    if cache_root.exists():
+        for sha_dir in cache_root.iterdir():
+            notes_path = sha_dir / "notes.json"
+            if notes_path.exists():
+                ns = NotesStore.load(sha_dir)
+                r, n = ns.remove_for_task(task_id)
+                removed_renames += r
+                removed_notes += n
+
+    # Delete the task directory itself
     shutil.rmtree(task.root, ignore_errors=True)
-    return {"ok": True}
+
+    return {
+        "ok": True,
+        "removed_findings": len(removed_findings),
+        "removed_docs": len(removed_docs),
+        "removed_renames": removed_renames,
+        "removed_notes": removed_notes,
+    }
 
 
 @app.get("/api/projects/{project_id}/tasks/{task_id}")
@@ -460,12 +540,59 @@ async def submit_mask(project_id: str, task_id: str, file: UploadFile) -> dict: 
 # ── Config update ────────────────────────────────────────────────────── #
 
 
+@app.post("/api/projects/{project_id}/tasks/{task_id}/job-spec")
+async def update_job_spec(project_id: str, task_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    """Update fields on the task's job spec."""
+    project, task = _get_task(project_id, task_id)
+    spec_dict = dict(task.config.job_spec)
+    # Merge provided fields into the existing job spec
+    for key in (
+        "target_description", "capabilities", "evaluation", "goal_type",
+        "input_mutation_hints", "max_gecko_runs", "max_tool_calls",
+        "message_limit", "run_seconds", "hud_min_mean", "preserve_max_mean",
+    ):
+        if key in body:
+            spec_dict[key] = body[key]
+    # Validate
+    from src.agent.job_spec import JobSpec
+
+    spec = JobSpec.from_dict(spec_dict)
+    errors = spec.validate()
+    if errors:
+        raise HTTPException(400, f"Invalid job spec: {'; '.join(errors)}")
+    task.config.job_spec = spec.to_dict()
+    # Preserve preset marker if it was set
+    if "_preset" in task.config.job_spec:
+        task.config.job_spec["_preset"] = task.config.job_spec["_preset"]
+    task.save()
+    return {"ok": True}
+
+
 @app.post("/api/projects/{project_id}/tasks/{task_id}/config")
 async def update_config(project_id: str, task_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
+    """Legacy config update endpoint — maps to job spec fields."""
     project, task = _get_task(project_id, task_id)
-    for key in ("hint", "prompt_fields", "run_seconds", "verify_budget", "hud_min_mean", "preserve_max_mean"):
-        if key in body:
-            setattr(task.config, key, body[key])
+    spec_dict = dict(task.config.job_spec) if task.config.job_spec else {}
+    if "hint" in body:
+        spec_dict["target_description"] = body["hint"]
+    if "verify_budget" in body:
+        spec_dict["max_gecko_runs"] = body["verify_budget"]
+    if "run_seconds" in body:
+        spec_dict["run_seconds"] = body["run_seconds"]
+    if "hud_min_mean" in body:
+        spec_dict["hud_min_mean"] = body["hud_min_mean"]
+    if "preserve_max_mean" in body:
+        spec_dict["preserve_max_mean"] = body["preserve_max_mean"]
+    if "prompt_fields" in body:
+        # Noclip prompt fields → target_description
+        pf = body["prompt_fields"]
+        if pf.get("objective"):
+            spec_dict["target_description"] = pf["objective"]
+    if spec_dict:
+        from src.agent.job_spec import JobSpec
+
+        spec = JobSpec.from_dict(spec_dict)
+        task.config.job_spec = spec.to_dict()
     task.save()
     return {"ok": True}
 
@@ -476,22 +603,19 @@ async def update_config(project_id: str, task_id: str, body: dict) -> dict[str, 
 @app.post("/api/projects/{project_id}/tasks/{task_id}/run")
 async def start_run(project_id: str, task_id: str, background_tasks: BackgroundTasks) -> dict[str, bool]:  # type: ignore[type-arg]
     project, task = _get_task(project_id, task_id)
+    spec = task.config.get_job_spec()
 
-    # Research tasks can go directly from CREATED to READY.
-    if task.config.task_type == "research" and task.state == TaskState.CREATED:
-        task.transition(TaskState.READY)
-
-    # Position discovery: needs a savestate, skip visual steps.
-    if task.config.task_type == "position_discovery" and task.state != TaskState.READY:
-        if not task.config.savestate_id:
-            raise HTTPException(400, "Position discovery requires a savestate")
-        task.transition(TaskState.READY)
-
-    # Noclip: needs a savestate, skip visual steps.
-    if task.config.task_type == "noclip" and task.state != TaskState.READY:
-        if not task.config.savestate_id:
-            raise HTTPException(400, "Noclip requires a savestate")
-        task.transition(TaskState.READY)
+    # Auto-transition to READY based on job spec requirements
+    if task.state != TaskState.READY:
+        if not spec.needs_savestate and not spec.needs_mask:
+            # No runtime needed (e.g., research) — go straight to READY
+            task.transition(TaskState.READY)
+        elif spec.needs_savestate and not spec.needs_mask:
+            # Runtime but no mask (e.g., position, noclip) — need savestate
+            if not task.config.savestate_id:
+                raise HTTPException(400, "This task requires a savestate")
+            task.transition(TaskState.READY)
+        # Visual tasks (needs_mask) must go through the full wizard
 
     if task.state != TaskState.READY:
         raise HTTPException(400, f"Cannot start run in state {task.state}")
@@ -504,6 +628,7 @@ async def start_run(project_id: str, task_id: str, background_tasks: BackgroundT
 
     background_tasks.add_task(_run)
     return {"ok": True}
+
 
 
 # ── SSE event stream (task level) ────────────────────────────────────── #
@@ -619,14 +744,12 @@ async def reset_knowledge(project_id: str) -> dict[str, bool]:
 
 @app.get("/api/projects/{project_id}/research")
 async def get_research_index(project_id: str) -> dict:  # type: ignore[type-arg]
-    """Return the research index + list of available docs."""
+    """Return the research index + list of available docs with summaries."""
+    from src.agent.research_tools import build_index, list_docs
+
     project = _get_project(project_id)
-    research_dir = project.root / "research"
-    if not research_dir.exists():
-        return {"index": "", "docs": []}
-    index_path = research_dir / "INDEX.md"
-    index_text = index_path.read_text() if index_path.exists() else ""
-    docs = sorted(p.name for p in research_dir.glob("*.md") if p.name != "INDEX.md")
+    index_text = build_index(project.root)
+    docs = list_docs(project.root)
     return {"index": index_text, "docs": docs}
 
 
@@ -643,15 +766,23 @@ async def get_research_doc(project_id: str, filename: str) -> dict:  # type: ign
 
 @app.delete("/api/projects/{project_id}/research/{filename}")
 async def delete_research_doc(project_id: str, filename: str) -> dict[str, bool]:
-    """Delete a single research document."""
+    """Delete a single research document and its metadata."""
     project = _get_project(project_id)
     research_dir = project.root / "research"
     path = research_dir / filename
     if not path.exists() or not path.resolve().is_relative_to(research_dir.resolve()):
         raise HTTPException(404, f"Document {filename} not found")
     if filename == "INDEX.md":
-        raise HTTPException(400, "Cannot delete INDEX.md")
+        raise HTTPException(400, "INDEX.md is auto-generated and cannot be deleted directly")
     path.unlink()
+
+    # Clean up metadata
+    from src.agent.research_tools import _load_meta, _save_meta
+
+    meta = _load_meta(research_dir)
+    meta.pop(filename, None)
+    _save_meta(research_dir, meta)
+
     return {"ok": True}
 
 
@@ -681,10 +812,20 @@ async def get_knowledge(project_id: str) -> dict:  # type: ignore[type-arg]
                 continue
             ns = NotesStore.load(sha_dir)
             sha1 = sha_dir.name
-            for addr, name in ns.renames.items():
-                renames.append({"address": addr, "name": name, "binary": sha1[:8]})
-            for addr, text in ns.notes.items():
-                notes.append({"address": addr, "text": text, "binary": sha1[:8]})
+            for addr, entry in ns.renames.items():
+                renames.append({
+                    "address": addr,
+                    "name": entry.get("value", ""),
+                    "binary": sha1[:8],
+                    "task_id": entry.get("task_id", ""),
+                })
+            for addr, entry in ns.notes.items():
+                notes.append({
+                    "address": addr,
+                    "text": entry.get("value", ""),
+                    "binary": sha1[:8],
+                    "task_id": entry.get("task_id", ""),
+                })
 
     return {"findings": findings, "renames": renames, "notes": notes}
 

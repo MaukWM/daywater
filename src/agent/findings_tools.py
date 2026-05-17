@@ -13,7 +13,7 @@ from src.findings import FindingsStore
 
 
 @tool
-def save_finding(project_root: Path) -> Tool:
+def save_finding(project_root: Path, task_id: str = "") -> Tool:
     """Build the ``save_finding`` tool bound to a project directory."""
 
     async def execute(
@@ -52,6 +52,7 @@ def save_finding(project_root: Path) -> Tool:
             label=label.strip(),
             detail=detail.strip(),
             address=address.strip(),
+            source_task=task_id,
         )
         addr_str = f" @ 0x{finding.address}" if finding.address else ""
         return f"Finding {finding.id} saved: {finding.label}{addr_str}"

@@ -203,7 +203,7 @@ def decompile() -> Tool:
 
         notes = NotesStore.load(cache_dir)
         display_name = notes.display_name(entry.addr, entry.name)
-        note_text = notes.notes.get(entry.addr)
+        note_text = notes.get_note(entry.addr)
 
         try:
             cs = callees_of(cache_dir, entry.addr)
@@ -229,7 +229,7 @@ def decompile() -> Tool:
         header_lines.append(f"// callers ({len(csr)}): {_short(csr)}")
         header = "\n".join(header_lines) + "\n\n"
 
-        body = _apply_renames_to_body(code, notes.renames)
+        body = _apply_renames_to_body(code, notes.renames_flat())
         if len(body) > _MAX_DECOMP_CHARS:
             body = body[:_MAX_DECOMP_CHARS] + f"\n\n// (truncated; full length {len(body)} chars)"
         return header + body
@@ -338,7 +338,7 @@ def find_string() -> Tool:
 
 
 @tool
-def rename_function() -> Tool:
+def rename_function(task_id: str = "") -> Tool:
     """Build the `rename_function` tool."""
 
     async def execute(addr_or_name: str, new_name: str) -> str:
@@ -363,8 +363,9 @@ def rename_function() -> Tool:
         except (FileNotFoundError, KeyError) as exc:
             return f"Error: {exc}"
         notes = NotesStore.load(cache_dir)
-        prior = notes.renames.get(entry.addr)
-        notes.rename(entry.addr, new_name.strip())
+        prior_entry = notes.renames.get(entry.addr)
+        prior = prior_entry.get("value") if prior_entry else None
+        notes.rename(entry.addr, new_name.strip(), task_id=task_id)
         if prior:
             return f"Renamed 0x{entry.addr}: {prior!r} → {new_name.strip()!r}"
         return f"Renamed 0x{entry.addr} ({entry.name}) → {new_name.strip()!r}"
@@ -373,7 +374,7 @@ def rename_function() -> Tool:
 
 
 @tool
-def add_note() -> Tool:
+def add_note(task_id: str = "") -> Tool:
     """Build the `add_note` tool."""
 
     async def execute(addr_or_name: str, text: str) -> str:
@@ -398,7 +399,7 @@ def add_note() -> Tool:
         except (FileNotFoundError, KeyError) as exc:
             return f"Error: {exc}"
         notes = NotesStore.load(cache_dir)
-        notes.add_note(entry.addr, text.strip())
+        notes.add_note(entry.addr, text.strip(), task_id=task_id)
         return f"Note saved on 0x{entry.addr}: {text.strip()[:80]}"
 
     return execute

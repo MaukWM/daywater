@@ -1,7 +1,12 @@
 services:
   spectre-web:
     build: .
+    init: true
     shm_size: "2g"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     ports:
       - "7860:7860"   # Spectre web UI
       - "7575:7575"   # Inspect AI log viewer
@@ -23,6 +28,10 @@ services:
   spectre:
     build: .
     shm_size: "2g"
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp=unconfined
     profiles: ["cli"]
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}

@@ -22,6 +22,7 @@ _LOGS_ROOT = Path("/app/logs") if Path("/app/logs").exists() else Path("./logs")
 _run_lock = asyncio.Lock()
 
 
+
 async def run_survey(project: Project) -> None:
     """Run Ghidra survey in background, updating project state as it goes."""
     from src.agent.discovery import format_inventory, survey_and_analyze

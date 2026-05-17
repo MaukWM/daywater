@@ -82,26 +82,47 @@ class TaskConfig:
     """Persisted task metadata (one agent run within a project)."""
 
     task_id: str
-    task_type: str = "hud_detection"
     state: TaskState = TaskState.CREATED
     created_at: float = field(default_factory=time.time)
 
+    # The job spec (serialized dict). This is the single source of truth
+    # for what the task does. Replaces the old task_type + scattered fields.
+    job_spec: dict[str, Any] = field(default_factory=dict)
+
     # Reference to a project-level savestate.
     savestate_id: str = ""
-
-    # Agent config (editable before run).
-    run_seconds: int = 10
-    verify_budget: int = 8
-    hud_min_mean: float = 5.0
-    preserve_max_mean: float = 6.0
-    hint: str = "Remove all HUD elements marked in the mask."
-    prompt_fields: dict[str, str] = field(default_factory=dict)
 
     # Result (set after run).
     result_verdict: str = ""
     result_gecko: str = ""
     result_hud_mean: float = 0.0
     result_preserve_mean: float = 0.0
+
+    # ── Legacy fields (for migration only) ──────────────────────── #
+    # These are read during deserialization for backwards compat
+    # but new tasks should use job_spec exclusively.
+    task_type: str = ""
+    run_seconds: int = 10
+    verify_budget: int = 8
+    hud_min_mean: float = 5.0
+    preserve_max_mean: float = 6.0
+    hint: str = ""
+    prompt_fields: dict[str, str] = field(default_factory=dict)
+
+    def get_job_spec(self) -> Any:
+        """Return a JobSpec instance, migrating legacy configs if needed."""
+        from src.agent.job_spec import JobSpec
+
+        if self.job_spec:
+            return JobSpec.from_dict(self.job_spec)
+
+        # Legacy migration: convert old task_type to a JobSpec
+        return _migrate_legacy_config(self)
+
+    @property
+    def preset_name(self) -> str:
+        """Return the preset name if this was created from a preset."""
+        return self.job_spec.get("_preset", "") if self.job_spec else self.task_type
 
 
 # ── Task ────────────────────────────────────────────────────────────────── #
@@ -291,15 +312,58 @@ class Project:
 
     # ── Task management ───────────────────────────────────────────────── #
 
-    def create_task(self, task_type: str = "hud_detection") -> Task:
+    def create_task(
+        self,
+        task_type: str = "",
+        *,
+        job_spec_dict: dict[str, Any] | None = None,
+        preset: str = "",
+    ) -> Task:
+        """Create a new task.
+
+        Args:
+            task_type: Legacy task type string (for backwards compat).
+            job_spec_dict: A serialized JobSpec dict.
+            preset: Name of a preset to load.
+        """
+        from src.agent.job_spec import JobSpec
+        from src.agent.presets import get_preset
+
         self.tasks_dir.mkdir(parents=True, exist_ok=True)
         tid = uuid.uuid4().hex[:8]
         task_dir = self.tasks_dir / tid
         task_dir.mkdir()
-        config = TaskConfig(task_id=tid, task_type=task_type)
+
+        # Resolve the job spec
+        if job_spec_dict:
+            spec = JobSpec.from_dict(job_spec_dict)
+            spec_dict = spec.to_dict()
+        elif preset:
+            spec = get_preset(preset)
+            spec_dict = spec.to_dict()
+            spec_dict["_preset"] = preset
+        elif task_type:
+            # Legacy: map old task_type to preset
+            legacy_map = {
+                "hud_detection": "hud_removal",
+                "research": "research",
+                "position_discovery": "position_finding",
+                "noclip": "noclip",
+            }
+            preset_name = legacy_map.get(task_type, "research")
+            spec = get_preset(preset_name)
+            spec_dict = spec.to_dict()
+            spec_dict["_preset"] = preset_name
+        else:
+            spec = get_preset("hud_removal")
+            spec_dict = spec.to_dict()
+            spec_dict["_preset"] = "hud_removal"
+
+        config = TaskConfig(task_id=tid, job_spec=spec_dict)
         task = Task(task_dir, config)
         task.save()
-        logger.info("task_created", project=self.project_id, task=tid, type=task_type)
+        label = preset or task_type or spec_dict.get("_preset", "custom")
+        logger.info("task_created", project=self.project_id, task=tid, preset=label)
         return task
 
     def get_task(self, task_id: str) -> Task | None:
@@ -361,3 +425,34 @@ class ProjectStore:
                 except (json.JSONDecodeError, TypeError):
                     continue
         return projects
+
+
+# ── Legacy migration ────────────────────────────────────────────────────── #
+
+
+def _migrate_legacy_config(cfg: TaskConfig) -> Any:
+    """Convert old task_type-based configs to a JobSpec."""
+    from src.agent.presets import get_preset
+
+    legacy_map = {
+        "hud_detection": "hud_removal",
+        "research": "research",
+        "position_discovery": "position_finding",
+        "noclip": "noclip",
+    }
+    preset_name = legacy_map.get(cfg.task_type, "research")
+    spec = get_preset(preset_name)
+
+    # Carry over any custom values from the legacy config
+    if cfg.hint:
+        spec.target_description = cfg.hint
+    if cfg.verify_budget:
+        spec.max_gecko_runs = cfg.verify_budget
+    if cfg.run_seconds:
+        spec.run_seconds = cfg.run_seconds
+    if cfg.hud_min_mean != 5.0:
+        spec.hud_min_mean = cfg.hud_min_mean
+    if cfg.preserve_max_mean != 6.0:
+        spec.preserve_max_mean = cfg.preserve_max_mean
+
+    return spec

@@ -541,7 +541,7 @@ def sample_position(session: DolphinSession) -> Tool:
 
 
 @tool
-def save_savestate_finding(savestate_root: Path) -> Tool:
+def save_savestate_finding(savestate_root: Path, task_id: str = "") -> Tool:
     """Build a savestate-scoped finding tool."""
 
     async def execute(
@@ -574,6 +574,7 @@ def save_savestate_finding(savestate_root: Path) -> Tool:
             label=label.strip(),
             detail=detail.strip(),
             address=address.strip(),
+            source_task=task_id,
         )
         addr_str = f" @ 0x{finding.address}" if finding.address else ""
         return f"Savestate finding {finding.id} saved: {finding.label}{addr_str}"
@@ -724,14 +725,13 @@ def apply_gecko_code(
 
 
 @tool
-def save_noclip_code(task_root: Path) -> Tool:
+def save_gecko_code(task_root: Path) -> Tool:
     """Build a tool that saves the final working Gecko code to the task."""
 
     async def execute(gecko_text: str) -> str:
-        """Save the final working Gecko code for the scorer to verify.
+        """Save the final working Gecko code.
 
-        Call this after you've confirmed the code works. The deterministic
-        scorer reads this file to run its own independent verification.
+        Call this after you've confirmed the code works.
 
         Args:
             gecko_text: The complete Gecko code text (with $Name headers).
@@ -742,12 +742,13 @@ def save_noclip_code(task_root: Path) -> Tool:
         if not codes:
             return "Error: no valid Gecko codes found."
 
-        code_path = task_root / "noclip_code.txt"
+        code_path = task_root / "gecko_code.txt"
         code_path.write_text(gecko_text)
-        logger.info("noclip_code_saved", path=str(code_path), codes=len(codes))
-        return (
-            f"Saved {len(codes)} Gecko code(s) to {code_path.name}. "
-            f"The scorer will use this for deterministic verification."
-        )
+        logger.info("gecko_code_saved", path=str(code_path), codes=len(codes))
+        return f"Saved {len(codes)} Gecko code(s) to {code_path.name}."
 
     return execute
+
+
+# Backwards compat alias
+save_noclip_code = save_gecko_code

@@ -229,10 +229,13 @@
         <div class="proj-panel-header">
           <h2>Tasks</h2>
           <div class="btn-group">
-            <button onclick="createTask('hud_detection')">+ HUD</button>
-            <button onclick="createTask('research')">+ Research</button>
-            <button onclick="createTask('position_discovery')">+ Position</button>
-            <button onclick="createTask('noclip')">+ Noclip</button>
+            <select id="preset-select" style="font-family:inherit; font-size:0.78rem; background:var(--surface); color:var(--text); border:1px solid var(--border); padding:0.3rem 0.5rem;">
+              <option value="hud_removal">HUD Removal</option>
+              <option value="position_finding">Position Finding</option>
+              <option value="noclip">Noclip</option>
+              <option value="research">Research</option>
+            </select>
+            <button onclick="createTaskFromPreset()">+ New Task</button>
           </div>
         </div>
 
@@ -634,7 +637,7 @@
           let verdict = '';
           if (t.result_verdict === 'PASS') verdict = '<span class="verdict-pass">PASS</span>';
           else if (t.result_verdict === 'FAIL') verdict = '<span class="verdict-fail">FAIL</span>';
-          const taskLabel = t.task_type.replace('_', ' ');
+          const taskLabel = (t.preset || t.goal_type || 'task').replace(/_/g, ' ');
           return `<li onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">
             <span class="cursor">&gt;</span>
             <span class="task-type">${taskLabel}</span>
@@ -692,24 +695,54 @@
       try {
         const res = await api('GET', `/api/projects/${currentProjectId}/research`);
         const listEl = document.getElementById('kb-file-list');
-        const allDocs = ['INDEX.md', ...res.docs];
-        listEl.innerHTML = allDocs.map(d =>
-          `<div style="padding:0.5rem 1rem; cursor:pointer; user-select:none; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text); display:flex; align-items:center; justify-content:space-between;" class="kb-file-item" id="kb-file-${d.replace('.','_')}">
-            <span onclick="openKbDoc('${d}')" style="flex:1">${d}</span>
-            ${d !== 'INDEX.md' ? `<button class="danger" style="padding:0.05rem 0.3rem; font-size:0.65rem; flex-shrink:0;" onclick="event.stopPropagation(); deleteResearchDoc('${d}')">x</button>` : ''}
-          </div>`
-        ).join('');
-        // Open INDEX.md by default
-        if (allDocs.length) openKbDoc('INDEX.md');
+
+        // Show auto-generated index as first entry
+        const indexEntry = `<div style="padding:0.5rem 1rem; cursor:pointer; user-select:none; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text); display:flex; align-items:center; justify-content:space-between;" class="kb-file-item" id="kb-file-INDEX_md">
+            <span onclick="showResearchIndex()" style="flex:1; font-weight:600;">INDEX</span>
+          </div>`;
+
+        // Docs now come as {filename, summary, task_id, created_at}
+        const docEntries = (res.docs || []).map(d => {
+          const fn = typeof d === 'string' ? d : d.filename;
+          const summary = (typeof d === 'object' && d.summary) ? d.summary : '';
+          const safeId = fn.replace(/\./g, '_');
+          return `<div style="padding:0.5rem 1rem; cursor:pointer; user-select:none; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text); display:flex; flex-direction:column; gap:0.15rem;" class="kb-file-item" id="kb-file-${safeId}">
+            <div style="display:flex; align-items:center; justify-content:space-between;">
+              <span onclick="openKbDoc('${fn}')" style="flex:1">${fn}</span>
+              <button class="danger" style="padding:0.05rem 0.3rem; font-size:0.65rem; flex-shrink:0;" onclick="event.stopPropagation(); deleteResearchDoc('${fn}')">x</button>
+            </div>
+            ${summary ? `<span style="font-size:0.72rem; color:var(--text-dim); line-height:1.3;" onclick="openKbDoc('${fn}')">${summary}</span>` : ''}
+          </div>`;
+        }).join('');
+
+        listEl.innerHTML = indexEntry + docEntries;
+
+        // Show index by default
+        _currentResearchIndex = res.index || '';
+        showResearchIndex();
       } catch (e) {
         console.error('Failed to load research:', e);
       }
     }
 
+    let _currentResearchIndex = '';
+
+    function showResearchIndex() {
+      document.querySelectorAll('.kb-file-item').forEach(f => f.classList.remove('active'));
+      const el = document.getElementById('kb-file-INDEX_md');
+      if (el) el.classList.add('active');
+
+      document.getElementById('kb-doc-name').textContent = 'INDEX (auto-generated)';
+      document.getElementById('kb-doc-content').innerText = _currentResearchIndex;
+      document.getElementById('kb-doc-view').style.display = 'flex';
+      document.getElementById('kb-doc-empty').style.display = 'none';
+    }
+
     async function openKbDoc(filename) {
       // Highlight active file
       document.querySelectorAll('.kb-file-item').forEach(f => f.classList.remove('active'));
-      const fileEl = document.getElementById(`kb-file-${filename.replace('.','_')}`);
+      const safeId = filename.replace(/\./g, '_');
+      const fileEl = document.getElementById(`kb-file-${safeId}`);
       if (fileEl) fileEl.classList.add('active');
 
       try {
@@ -836,10 +869,21 @@
       poll();
     }
 
+    async function createTaskFromPreset() {
+      const preset = document.getElementById('preset-select').value;
+      try {
+        const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { preset });
+        location.hash = `#/project/${currentProjectId}/task/${result.task_id}`;
+      } catch (e) {
+        alert('Failed to create task: ' + e.message);
+      }
+    }
+
+    // Legacy support for any remaining callers
     async function createTask(taskType) {
       try {
-        const { task_id } = await api('POST', `/api/projects/${currentProjectId}/tasks`, { type: taskType });
-        location.hash = `#/project/${currentProjectId}/task/${task_id}`;
+        const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { type: taskType });
+        location.hash = `#/project/${currentProjectId}/task/${result.task_id}`;
       } catch (e) {
         alert('Failed to create task: ' + e.message);
       }
@@ -1169,27 +1213,31 @@
         const t = await api('GET', `/api/projects/${currentProjectId}/tasks/${currentTaskId}`);
         surveyComplete = t.survey_complete || false;
         const state = t.state;
-        const isResearch = t.task_type === 'research';
-        const isPosition = t.task_type === 'position_discovery';
-        const isNoclip = t.task_type === 'noclip';
 
-        if (isResearch) {
-          // Research tasks: hide upload steps, show only run + results
+        // Determine task shape from job_spec
+        const spec = t.job_spec || {};
+        const goalType = spec.goal_type || '';
+        const caps = new Set(spec.capabilities || []);
+        const evaluation = spec.evaluation || 'manual_review';
+        const needsSavestate = caps.has('gecko_injection') || caps.has('ram_poke') || caps.has('input_injection') || caps.has('frame_capture');
+        const needsMask = evaluation === 'pixel_diff_mask';
+        const targetDesc = spec.target_description || '';
+
+        // Determine which wizard steps to show based on spec
+        if (!needsSavestate && !needsMask) {
+          // No runtime, no mask (e.g., research)
           document.getElementById('step-savestate').hidden = true;
           document.getElementById('step-screenshot').hidden = true;
           document.getElementById('step-mask').hidden = true;
-          // Renumber visible steps: 01=run, 02=results
           document.querySelector('#step-run .step-num').textContent = '01';
           document.querySelector('#step-results .step-num').textContent = '02';
-          document.getElementById('hint-input').value = t.hint || 'Explore the codebase and document your findings.';
+          document.getElementById('hint-input').value = targetDesc || 'Explore the codebase and document your findings.';
           document.getElementById('budget-input').parentElement.parentElement.hidden = true;
           document.getElementById('run-seconds-input').parentElement.parentElement.hidden = true;
 
-          if (state === 'created' || state === 'ready') {
-            unlockStep('step-run');
-          } else if (state === 'running') {
-            unlockStep('step-run');
-          } else if (state === 'done' || state === 'failed') {
+          if (state === 'created' || state === 'ready') unlockStep('step-run');
+          else if (state === 'running') unlockStep('step-run');
+          else if (state === 'done' || state === 'failed') {
             unlockStep('step-run');
             completeStep('step-run', state);
             loadResults();
@@ -1197,28 +1245,15 @@
           return;
         }
 
-        if (isPosition || isNoclip) {
-          // Position discovery / noclip: savestate selector + run, no screenshot/mask
+        if (needsSavestate && !needsMask) {
+          // Runtime but no mask (e.g., position, noclip)
           document.getElementById('step-screenshot').hidden = true;
           document.getElementById('step-mask').hidden = true;
-          // Renumber visible steps: 01=savestate, 02=run, 03=results
           document.querySelector('#step-run .step-num').textContent = '02';
           document.querySelector('#step-results .step-num').textContent = '03';
           document.getElementById('budget-input').parentElement.parentElement.hidden = true;
           document.getElementById('run-seconds-input').parentElement.parentElement.hidden = true;
-
-          if (isNoclip) {
-            // Show structured noclip fields, hide generic hint label + description
-            const hintLabel = document.getElementById('hint-input').parentElement;
-            hintLabel.hidden = true;
-            hintLabel.nextElementSibling.hidden = true;
-            document.getElementById('noclip-fields').hidden = false;
-            const pf = t.prompt_fields || {};
-            document.getElementById('noclip-objective').value = pf.objective || 'Create a Gecko code that enables noclip / freecam \u2014 the player must be able to fly freely in all three axes.';
-            document.getElementById('noclip-controls').value = pf.expected_controls || 'Look-direction flight: looking up + walking forward = fly upward. Or: dedicated L/R triggers for ascend/descend.';
-          } else {
-            document.getElementById('hint-input').value = (t.hint && t.hint !== 'Remove all HUD elements marked in the mask.') ? t.hint : 'Find the exact RAM addresses for player X, Y, Z position.';
-          }
+          document.getElementById('hint-input').value = targetDesc || 'Describe the task objective.';
 
           unlockStep('step-savestate');
           populateSavestateDropdown();
@@ -1228,14 +1263,10 @@
           }
 
           if (state === 'created') return;
-
-          // Savestate selected — go straight to run
           completeStep('step-savestate', 'selected');
-          if (state === 'ready' || state === 'savestate_uploaded') {
-            unlockStep('step-run');
-          } else if (state === 'running') {
-            unlockStep('step-run');
-          } else if (state === 'done' || state === 'failed') {
+          if (state === 'ready' || state === 'savestate_uploaded') unlockStep('step-run');
+          else if (state === 'running') unlockStep('step-run');
+          else if (state === 'done' || state === 'failed') {
             unlockStep('step-run');
             completeStep('step-run', state);
             loadResults();
@@ -1243,36 +1274,28 @@
           return;
         }
 
-        // HUD detection flow
-        // Step 1: savestate is always unlocked.
+        // Visual task (needs mask): full wizard — savestate → screenshot → mask → run → results
+        document.getElementById('hint-input').value = targetDesc || 'Remove all marked elements.';
         unlockStep('step-savestate');
         populateSavestateDropdown();
 
-        // Pre-select if already chosen.
         if (t.savestate_id) {
-          const sel = document.getElementById('savestate-select');
-          // Set after dropdown populates (async).
-          setTimeout(() => { sel.value = t.savestate_id; }, 200);
+          setTimeout(() => { document.getElementById('savestate-select').value = t.savestate_id; }, 200);
         }
 
-        if (state === 'created') {
-          return;
-        }
+        if (state === 'created') return;
 
-        // Savestate was selected.
         completeStep('step-savestate', 'selected');
         unlockStep('step-screenshot');
 
         if (state === 'savestate_uploaded') return;
 
-        // Frame is ready.
         completeStep('step-screenshot', 'captured');
         unlockStep('step-mask');
         initMaskPainter(`/api/projects/${currentProjectId}/tasks/${currentTaskId}/files/reference.png`);
 
         if (state === 'frame_ready') return;
 
-        // Mask submitted.
         completeStep('step-mask', 'submitted');
         maskSubmitted = true;
 
@@ -1281,7 +1304,6 @@
           return;
         }
 
-        // Ready or later.
         if (state === 'ready' || state === 'running' || state === 'done' || state === 'failed') {
           unlockStep('step-run');
         }
@@ -1340,19 +1362,22 @@
         const result = await api('POST', `${taskPath()}/select-savestate`, { savestate_id: ssId });
         completeStep('step-savestate', 'selected');
 
-        // Reload task to get current state, then route by task type.
+        // Reload task to get current state, then route by spec
         const t = await api('GET', `${taskPath()}`);
+        const spec = t.job_spec || {};
+        const evaluation = spec.evaluation || 'manual_review';
+        const needsMask = evaluation === 'pixel_diff_mask';
 
-        if (t.task_type === 'position_discovery' || t.task_type === 'noclip') {
-          // Position discovery / noclip: go straight to run.
+        if (!needsMask) {
+          // Runtime-only task: go straight to run.
           unlockStep('step-run');
         } else if (result.has_reference) {
-          // HUD: screenshot was already rendered — skip capture, go to mask.
+          // Visual: screenshot was already rendered — skip capture, go to mask.
           completeStep('step-screenshot', 'from savestate');
           unlockStep('step-mask');
           initMaskPainter(`${taskPath()}/files/reference.png`);
         } else {
-          // HUD: no screenshot cached — need to capture.
+          // Visual: no screenshot cached — need to capture.
           unlockStep('step-screenshot');
         }
       } catch (e) {
@@ -1434,16 +1459,9 @@
     }
 
     async function startRun() {
+      // Save the current config before starting
       const config = {};
-      const noclipFields = document.getElementById('noclip-fields');
-      if (!noclipFields.hidden) {
-        config.prompt_fields = {
-          objective: document.getElementById('noclip-objective').value,
-          expected_controls: document.getElementById('noclip-controls').value,
-        };
-      } else {
-        config.hint = document.getElementById('hint-input').value;
-      }
+      config.hint = document.getElementById('hint-input').value;
       const budgetEl = document.getElementById('budget-input');
       const runSecsEl = document.getElementById('run-seconds-input');
       if (!budgetEl.parentElement.parentElement.hidden) {
