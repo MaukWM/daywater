@@ -681,13 +681,19 @@ def apply_gecko_code(
         code_summary = ", ".join(f"${c.name} ({len(c.lines)} lines)" for c in codes)
         logger.info("apply_gecko_code", codes=code_summary)
 
-        # Terminate old session
+        # Terminate old session + its context manager
         old_session = session_ref.session
+        old_cm = getattr(old_session, "_gecko_cm", None)
         try:
             old_session.terminate()
             old_session.cleanup()
         except Exception:
             pass
+        if old_cm is not None:
+            try:
+                old_cm.__exit__(None, None, None)
+            except Exception:
+                pass
 
         # Boot new session with gecko codes
         session_cm = DolphinSession.start(
@@ -698,8 +704,8 @@ def apply_gecko_code(
         )
         new_session = session_cm.__enter__()
 
-        # Store the context manager on the session for cleanup
-        object.__setattr__(new_session, "_noclip_cm", session_cm)
+        # Store the context manager on the session so the next call can clean it up
+        object.__setattr__(new_session, "_gecko_cm", session_cm)
 
         if not new_session.wait_for_first_frame():
             return "Error: Dolphin failed to produce frames after reboot."

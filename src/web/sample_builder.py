@@ -253,8 +253,12 @@ def _setup_session(
         def _cleanup() -> None:
             try:
                 current = ref.session
+                # Clean up the gecko-swapped session's CM if it has one
+                gecko_cm = getattr(current, "_gecko_cm", None)
                 current.terminate()
                 current.cleanup()
+                if gecko_cm is not None:
+                    gecko_cm.__exit__(None, None, None)
             except Exception:
                 pass
             try:
