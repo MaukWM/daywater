@@ -1,4 +1,4 @@
-"""Inspect AI agent loop for spectre.
+"""Inspect AI agent loop for daywater.
 
 Public surface:
 

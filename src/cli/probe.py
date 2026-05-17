@@ -2,7 +2,7 @@
 
 Mirrors what `mac_harness.py` did before Phase B refactor. Lives here so
 the agent's tool layer can keep calling the library directly while humans
-still get a `uv run spectre-probe ...` for ad-hoc checks.
+still get a `uv run daywater-probe ...` for ad-hoc checks.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def main() -> int:
             logger.info("savestate_version", version=sav_ver)
         return 2
 
-    tmp_root = Path(tempfile.mkdtemp(prefix="spectre_probe_"))
+    tmp_root = Path(tempfile.mkdtemp(prefix="daywater_probe_"))
     user_dir = tmp_root / "user"
     try:
         write_user_dir(user_dir, game_id, gecko_codes)

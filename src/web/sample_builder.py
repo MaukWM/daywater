@@ -326,7 +326,7 @@ def _run_dolphin_with_retry(
     from src.logging import logger
 
     for attempt in range(1 + max_retries):
-        tmp_root = Path(tempfile.mkdtemp(prefix="spectre_web_tool_"))
+        tmp_root = Path(tempfile.mkdtemp(prefix="daywater_web_tool_"))
         try:
             user_dir = tmp_root / "user"
             game_id = read_game_id(iso_path)

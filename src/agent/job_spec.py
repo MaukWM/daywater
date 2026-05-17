@@ -1,4 +1,4 @@
-"""Unified job specification for Spectre RE tasks.
+"""Unified job specification for Daywater RE tasks.
 
 Every RE task — preset or custom — is expressed as a configuration across
 7 axes. The system wires prompts, tools, and scorers from this spec.

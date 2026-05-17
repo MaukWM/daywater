@@ -1,5 +1,5 @@
 services:
-  spectre-web:
+  daywater-web:
     build: .
     init: true
     shm_size: "2g"
@@ -8,12 +8,12 @@ services:
     security_opt:
       - seccomp=unconfined
     ports:
-      - "7860:7860"   # Spectre web UI
+      - "7860:7860"   # Daywater web UI
       - "7575:7575"   # Inspect AI log viewer
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - INSPECT_EVAL_MODEL=${INSPECT_EVAL_MODEL:-openai/gpt-5.5}
-      - SPECTRE_GHIDRA_HOME=/opt/ghidra
+      - DAYWATER_GHIDRA_HOME=/opt/ghidra
       - _JAVA_OPTIONS=-Xmx4g
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
     volumes:
@@ -22,10 +22,10 @@ services:
       - ./logs:/app/logs
       - ./roms:/data/roms:ro
       - ./src/web/static:/app/src/web/static:ro  # hot-reload frontend in dev
-    command: ["spectre-web"]
+    command: ["daywater-web"]
 
   # Legacy CLI-only service (optional, for manual runs).
-  spectre:
+  daywater:
     build: .
     shm_size: "2g"
     cap_add:

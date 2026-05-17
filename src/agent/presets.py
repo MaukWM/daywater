@@ -1,4 +1,4 @@
-"""Preset job specs for the 4 standard Spectre task types.
+"""Preset job specs for the 4 standard Daywater task types.
 
 Each preset is a pre-filled JobSpec. Users can select a preset and tweak
 any field before running.

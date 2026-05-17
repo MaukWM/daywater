@@ -5,7 +5,7 @@ subprocess / postScript dance. We import the DOL, run auto-analysis,
 walk every function, decompile each, and write a JSON index plus a
 per-function pseudocode file.
 
-The Ghidra install path must be in `SPECTRE_GHIDRA_HOME`. PyGhidra
+The Ghidra install path must be in `DAYWATER_GHIDRA_HOME`. PyGhidra
 discovers it via the standard `GHIDRA_INSTALL_DIR` env var, so we
 mirror it into the subprocess env before `pyghidra.start()`.
 
@@ -50,9 +50,9 @@ class AnalysisResult:
 
 
 def _resolve_ghidra_home() -> Path:
-    raw = os.environ.get("SPECTRE_GHIDRA_HOME")
+    raw = os.environ.get("DAYWATER_GHIDRA_HOME")
     if not raw:
-        raise RuntimeError("SPECTRE_GHIDRA_HOME not set (path to a Ghidra install)")
+        raise RuntimeError("DAYWATER_GHIDRA_HOME not set (path to a Ghidra install)")
     home = Path(raw).expanduser().resolve()
     if not (home / "support" / "analyzeHeadless").exists():
         raise FileNotFoundError(f"not a Ghidra install root: {home}")
@@ -91,7 +91,7 @@ def run_analysis(
     binary_path: Path,
     cache_dir: Path | None = None,
     *,
-    project_name: str = "spectre",
+    project_name: str = "daywater",
     force: bool = False,
 ) -> AnalysisResult:
     """Analyze `binary_path` (ELF or DOL) and dump a content-addressed cache.

@@ -1,7 +1,7 @@
 [project]
-name = "spectre"
+name = "daywater"
 version = "0.1.0"
-description = "Automatically find HUD disabling cheats in games emulated on dolphin"
+description = "GameCube reverse engineering agent platform"
 requires-python = ">=3.13"
 dependencies = [
 
@@ -23,7 +23,7 @@ dependencies = [
     "inspect-ai>=0.3.140",
     "openai>=1.40.0",
 
-    # Static analysis (Ghidra-as-a-library; requires SPECTRE_GHIDRA_HOME)
+    # Static analysis (Ghidra-as-a-library; requires DAYWATER_GHIDRA_HOME)
     "pyghidra>=2.0.0",
 
     # Web frontend
@@ -33,9 +33,9 @@ dependencies = [
 ]
 
 [project.scripts]
-spectre-probe = "src.cli.probe:main"
-spectre-diff = "src.cli.diff:main"
-spectre-web = "src.web.app:main"
+daywater-probe = "src.cli.probe:main"
+daywater-diff = "src.cli.diff:main"
+daywater-web = "src.web.app:main"
 
 [build-system]
 requires = ["hatchling"]

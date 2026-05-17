@@ -387,7 +387,7 @@ class DolphinSession:
         # Set up user directory
         tmp_root: Path | None = None
         if user_dir is None:
-            tmp_root = Path(tempfile.mkdtemp(prefix="spectre_session_"))
+            tmp_root = Path(tempfile.mkdtemp(prefix="daywater_session_"))
             user_dir = tmp_root / "user"
 
         # Read game ID for INI file naming

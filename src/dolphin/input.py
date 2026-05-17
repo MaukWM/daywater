@@ -55,7 +55,7 @@ C-Stick/Left = `Axis C X -`
 C-Stick/Right = `Axis C X +`
 """
 
-DEFAULT_PIPE_NAME = "spectre"
+DEFAULT_PIPE_NAME = "daywater"
 
 
 # --- Input sequence data model -------------------------------------------- #

@@ -94,7 +94,7 @@ def run_gecko(sample_dir: Path) -> Tool:
                 f"({remaining} calls remaining)"
             )
 
-        tmp_root = Path(tempfile.mkdtemp(prefix="spectre_tool_"))
+        tmp_root = Path(tempfile.mkdtemp(prefix="daywater_tool_"))
         try:
             user_dir = tmp_root / "user"
             write_user_dir(user_dir, read_game_id(iso), codes)

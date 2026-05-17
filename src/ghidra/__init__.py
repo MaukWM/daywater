@@ -1,4 +1,4 @@
-"""Ghidra-backed static analysis for spectre."""
+"""Ghidra-backed static analysis for daywater."""
 
 from src.ghidra.analyze import (
     CACHE_ROOT,

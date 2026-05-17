@@ -92,7 +92,7 @@ def _find_linux_dolphin() -> str:
             return str(path)
     raise FileNotFoundError(
         f"Neither {DOLPHIN_LINUX_NOGUI} nor {DOLPHIN_LINUX_GUI} found in PATH or /usr/games. "
-        "Install Dolphin (e.g. `nix develop` in the spectre directory)."
+        "Install Dolphin (e.g. `nix develop` in the daywater directory)."
     )
 
 

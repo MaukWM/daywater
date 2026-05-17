@@ -18,7 +18,7 @@ from src.web.mask import save_mask
 from src.web.sessions import ProjectStore, TaskState
 from src.web.uploads import save_iso, save_reference_frame, save_savestate_to_project
 
-app = FastAPI(title="Spectre", version="0.2.0")
+app = FastAPI(title="Daywater", version="0.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -104,7 +104,7 @@ async def upload_iso(project_id: str, file: UploadFile, background_tasks: Backgr
         raise HTTPException(400, "ISO already uploaded for this project")
 
     # Stream upload to temp file.
-    tmp = Path(tempfile.mktemp(suffix=".iso", prefix="spectre_upload_"))
+    tmp = Path(tempfile.mktemp(suffix=".iso", prefix="daywater_upload_"))
     size = 0
     with tmp.open("wb") as f:
         while chunk := await file.read(1 << 20):
@@ -307,7 +307,7 @@ async def get_task_status(project_id: str, task_id: str) -> dict:  # type: ignor
 async def upload_savestate(project_id: str, file: UploadFile, name: str = "") -> dict:  # type: ignore[type-arg]
     project = _get_project(project_id)
 
-    tmp = Path(tempfile.mktemp(suffix=".sav", prefix="spectre_upload_"))
+    tmp = Path(tempfile.mktemp(suffix=".sav", prefix="daywater_upload_"))
     size = 0
     with tmp.open("wb") as f:
         while chunk := await file.read(1 << 20):

@@ -1,7 +1,6 @@
-"""Inspect AI `@task` entry point for Spectre.
+"""Inspect AI `@task` entry point for Daywater.
 
 Unified entry point: accepts a preset name or a JSON job spec file.
-Backwards-compatible: `inspect eval src/agent/task.py` still runs HUD removal.
 """
 
 from __future__ import annotations
@@ -25,8 +24,8 @@ from src.agent.tool_builder import build_tools
 from src.dolphin import read_game_id
 
 SAMPLES_DIR = Path(__file__).resolve().parents[2] / "samples"
-SPECTRE_ROOT = Path(__file__).resolve().parents[2]
-EXTRACT_ROOT = SPECTRE_ROOT / "cache" / "extracted"
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+EXTRACT_ROOT = PROJECT_ROOT / "cache" / "extracted"
 DEFAULT_SAMPLE = "nightfire_hud_off"
 
 
@@ -36,13 +35,13 @@ def _extract_root_for(iso_path: Path) -> Path:
 
 
 @task
-def spectre_task(
+def daywater_task(
     preset: str = "hud_removal",
     job_spec_path: str = "",
     iso: str = "",
     savestate: str = "",
 ) -> Task:
-    """Unified Spectre task entry point.
+    """Unified Daywater task entry point.
 
     Args:
         preset: Name of a preset (hud_removal, position_finding, noclip, research).
@@ -79,7 +78,7 @@ def spectre_task(
 
     # CLI mode: persist findings under sessions/_cli/<game_id>/
     game_id = read_game_id(iso_path)
-    cli_project_root = SPECTRE_ROOT / "sessions" / "_cli" / game_id
+    cli_project_root = PROJECT_ROOT / "sessions" / "_cli" / game_id
     cli_project_root.mkdir(parents=True, exist_ok=True)
 
     # Include the user's env-supplied ELF (if any).
@@ -129,4 +128,4 @@ def spectre_task(
 
 
 # Backwards compat: `inspect eval src/agent/task.py` still works
-hud_off = spectre_task
+hud_off = daywater_task

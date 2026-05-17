@@ -1,4 +1,4 @@
-# Spectre sample: 007: Nightfire NTSC, HUD-removal task.
+# Daywater sample: 007: Nightfire NTSC, HUD-removal task.
 #
 # Paths to licensed binaries (ROM, savestate) are read from env vars at
 # runtime, not committed. Everything else (hint, reference frame, mask)
@@ -9,13 +9,13 @@ game_id = "GO7E69"                # 6-byte GameCube disc ID, must match ISO
 description = "Disable the health and ammo HUD elements in 007: Nightfire NTSC."
 
 # Environment variables resolved at task load time.
-iso_env = "SPECTRE_NIGHTFIRE_ISO"
-savestate_env = "SPECTRE_NIGHTFIRE_SAV"
+iso_env = "DAYWATER_NIGHTFIRE_ISO"
+savestate_env = "DAYWATER_NIGHTFIRE_SAV"
 
 # Optional: pre-merged ELF from a decomp project. When set, Ghidra
 # analyzes this instead of the DOL extracted from the ISO. Strongly
 # preferred — covers REL-loaded modules and the full address space.
-binary_env = "SPECTRE_NIGHTFIRE_ELF"
+binary_env = "DAYWATER_NIGHTFIRE_ELF"
 
 # Dolphin run config.
 run_seconds = 10

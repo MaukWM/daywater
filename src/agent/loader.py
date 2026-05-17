@@ -25,14 +25,14 @@ from inspect_ai.model import ChatMessageUser, ContentImage, ContentText
 from src.agent.prompts import TASK_INPUT_PREFIX
 from src.findings import FindingsStore
 
-SPECTRE_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _resolve_path(raw: str) -> Path:
-    """Expand `~`, anchor relative paths to the spectre repo root."""
+    """Expand `~`, anchor relative paths to the daywater repo root."""
     p = Path(raw).expanduser()
     if not p.is_absolute():
-        p = (SPECTRE_ROOT / p).resolve()
+        p = (PROJECT_ROOT / p).resolve()
     else:
         p = p.resolve()
     return p

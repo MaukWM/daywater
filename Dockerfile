@@ -50,7 +50,7 @@ RUN curl -fsSL "$GCL_URL" -o /tmp/gcl.zip \
     && unzip -q /tmp/gcl.zip -d /opt/ghidra/Ghidra/Extensions \
     && rm /tmp/gcl.zip
 
-ENV SPECTRE_GHIDRA_HOME=/opt/ghidra
+ENV DAYWATER_GHIDRA_HOME=/opt/ghidra
 ENV GHIDRA_INSTALL_DIR=/opt/ghidra
 
 # Dolphin + other game binaries live in /usr/games on Debian/Ubuntu
@@ -84,4 +84,4 @@ ENV _JAVA_OPTIONS="-Xmx4g"
 EXPOSE 7860 7575
 
 ENTRYPOINT ["uv", "run"]
-CMD ["spectre-web"]
+CMD ["daywater-web"]

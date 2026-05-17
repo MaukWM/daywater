@@ -20,20 +20,20 @@ from inspect_ai.util import store
 from src.ghidra.analyze import cache_dir_for_sha1
 
 # `run_gecko` budget counter (int).
-BUDGET_KEY = "spectre_run_gecko_used"
+BUDGET_KEY = "daywater_run_gecko_used"
 
 # Last gecko_text that earned a PASS verdict (str). The scorer falls back
 # to this if the agent forgets to submit a textual answer.
-LAST_PASS_KEY = "spectre_last_pass_gecko"
+LAST_PASS_KEY = "daywater_last_pass_gecko"
 
 # Current binary SHA-1 the agent is exploring. None / unset → no binary
 # selected yet; the agent must call `switch_binary` before any
 # static-analysis tool will return data.
-CURRENT_BINARY_SHA1_KEY = "spectre_current_binary_sha1"
+CURRENT_BINARY_SHA1_KEY = "daywater_current_binary_sha1"
 
 # Map of {sha1: source_binary_path_str} so `list_known_binaries` can show
 # the agent which binaries have already been analyzed this session.
-KNOWN_BINARIES_KEY = "spectre_known_binaries"
+KNOWN_BINARIES_KEY = "daywater_known_binaries"
 
 
 def set_current_binary(sha1: str, source_path: Path | None = None) -> None:

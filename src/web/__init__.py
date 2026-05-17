@@ -1,1 +1,1 @@
-"""Spectre web frontend — FastAPI + vanilla JS."""
+"""Daywater web frontend — FastAPI + vanilla JS."""

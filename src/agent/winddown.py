@@ -13,7 +13,7 @@ from typing import Any
 from inspect_ai.tool import Tool
 from inspect_ai.util import store
 
-_CALL_COUNT_KEY = "spectre_tool_call_count"
+_CALL_COUNT_KEY = "daywater_tool_call_count"
 
 WINDDOWN_WARNING = (
     "\n\n⚠️ BUDGET CRITICAL — You are almost out of messages. "

@@ -81,7 +81,7 @@ async def run_capture_frame(savestate_path: Path, iso_path: Path) -> Path:
 
             from src.dolphin.runner import _build_command, _terminate, check_savestate_compatibility
 
-            tmp_root = Path(tempfile.mkdtemp(prefix="spectre_capture_"))
+            tmp_root = Path(tempfile.mkdtemp(prefix="daywater_capture_"))
             user_dir = tmp_root / "user"
             game_id = read_game_id(iso_path)
             write_user_dir(user_dir, game_id, [])  # no gecko codes
