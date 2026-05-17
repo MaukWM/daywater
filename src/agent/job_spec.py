@@ -31,7 +31,6 @@ class Capability(StrEnum):
 class EvaluationMethod(StrEnum):
     PIXEL_DIFF_MASK = "pixel_diff_mask"
     MANUAL_REVIEW = "manual_review"
-    NONE = "none"
 
 
 @dataclass
@@ -141,7 +140,7 @@ class JobSpec:
         return cls(
             goal_type=GoalType(d["goal_type"]),
             capabilities={Capability(c) for c in d.get("capabilities", [])},
-            evaluation=EvaluationMethod(d.get("evaluation", "manual_review")),
+            evaluation=EvaluationMethod(d.get("evaluation", "manual_review").replace("none", "manual_review")),
             target_description=d.get("target_description", ""),
             input_mutation_hints=[
                 InputMutationHint(**h) for h in d.get("input_mutation_hints", [])

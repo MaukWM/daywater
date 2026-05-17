@@ -1275,3 +1275,258 @@ button.danger:hover:not(:disabled) {
     width: 100%;
   }
 }
+
+/* ── New Task Creator ──────────────────────────────────────────────── */
+
+#view-new-task.active {
+  display: block;
+}
+
+#view-new-task .ntc {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 1rem 3rem;
+}
+
+#view-new-task .ntc > h2 {
+  font-size: 1rem;
+  color: var(--green);
+  margin: 0 0 0.15rem;
+}
+
+.ntc-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin: 0 0 1.5rem;
+}
+
+/* -- Form sections with clear visual separation -- */
+.ntc-section {
+  margin: 0 0 1.8rem;
+}
+
+.ntc-label {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--green-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 0.6rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ntc-hint {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin: 0.4rem 0 0;
+  line-height: 1.5;
+}
+
+/* -- Inputs -- */
+#view-new-task select,
+#view-new-task textarea,
+#view-new-task input[type="text"],
+#view-new-task input[type="number"] {
+  font-family: inherit;
+  font-size: 0.8rem;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.7rem;
+  border-radius: 0;
+  transition: border-color 0.15s;
+}
+
+#view-new-task select:focus,
+#view-new-task textarea:focus,
+#view-new-task input:focus {
+  outline: none;
+  border-color: var(--green-dim);
+}
+
+#view-new-task textarea {
+  resize: vertical;
+}
+
+/* -- Presets -- */
+.preset-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.preset-btn {
+  font-family: inherit;
+  font-size: 0.75rem;
+  padding: 0.45rem 1rem;
+  background: var(--surface);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  text-transform: capitalize;
+  transition: all 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.preset-btn:hover {
+  border-color: var(--green-dim);
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.preset-btn.active {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+/* -- Objective row -- */
+.ntc-obj-row {
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.ntc-obj-row > div:first-child {
+  flex: 0 0 200px;
+}
+
+.ntc-obj-row > div:last-child {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  .ntc-obj-row { flex-direction: column; }
+  .ntc-obj-row > div:first-child { flex: none; width: 100%; }
+}
+
+/* -- Capabilities grid -- */
+.cap-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+@media (max-width: 600px) {
+  .cap-grid { grid-template-columns: 1fr; }
+}
+
+.cap-card {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  position: relative;
+  min-height: 52px;
+}
+
+.cap-card:hover {
+  border-color: var(--text-dim);
+}
+
+.cap-card.cap-on {
+  border-left: 3px solid var(--green-dim);
+  background: rgba(0, 255, 159, 0.03);
+}
+
+.cap-card.cap-on .cap-title {
+  color: var(--green);
+}
+
+.cap-card.cap-locked {
+  cursor: default;
+  opacity: 0.75;
+}
+
+.cap-card.cap-locked::after {
+  content: attr(data-reason);
+  position: absolute;
+  top: 0.35rem;
+  right: 0.55rem;
+  font-size: 0.58rem;
+  color: var(--amber-dim);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.cap-cb {
+  flex-shrink: 0;
+  padding-top: 0.15rem;
+}
+
+.cap-cb input[type="checkbox"] {
+  accent-color: var(--green);
+  width: 14px;
+  height: 14px;
+  margin: 0;
+}
+
+.cap-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.cap-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+  transition: color 0.15s;
+}
+
+.cap-detail {
+  font-size: 0.66rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+  margin-top: 0.15rem;
+}
+
+/* -- Budget -- */
+.budget-row {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.budget-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.budget-field > label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.budget-field input[type="number"] {
+  width: 90px;
+}
+
+/* -- Hint rows -- */
+.hint-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.hint-row select,
+.hint-row input[type="text"] {
+  flex: 1;
+}
+
+.hint-arrow {
+  color: var(--green-dim);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  font-weight: 600;
+}

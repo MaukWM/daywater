@@ -62,7 +62,7 @@ PRESETS: dict[str, JobSpec] = {
             Capability.STATIC_RE,
             Capability.DISCOVERY,
         },
-        evaluation=EvaluationMethod.NONE,
+        evaluation=EvaluationMethod.MANUAL_REVIEW,
         target_description="Analyze binary structure and document findings.",
     ),
 }

@@ -28,9 +28,7 @@ def build_scorer(spec: JobSpec, **kwargs: Any) -> Scorer:
             spec=spec,
             session_cleanup=session_cleanup,
         )
-    elif spec.evaluation == EvaluationMethod.MANUAL_REVIEW:
-        return _manual_review_scorer(session_cleanup=session_cleanup)
-    else:  # NONE
+    else:
         return _manual_review_scorer(session_cleanup=session_cleanup)
 
 

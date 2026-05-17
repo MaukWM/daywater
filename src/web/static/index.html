@@ -167,6 +167,94 @@
     </div>
   </main>
 
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- VIEW: New Task Creator                                         -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <div id="view-new-task" class="view">
+    <nav class="breadcrumb" id="new-task-breadcrumb"></nav>
+    <div class="ntc">
+      <h2>Create Task</h2>
+      <p class="ntc-subtitle">Configure what the agent should do, which tools it gets, and how it's evaluated.</p>
+
+      <!-- Presets -->
+      <div class="ntc-section">
+        <span class="ntc-label">Quick start</span>
+        <div class="preset-row" id="preset-buttons"></div>
+        <p class="ntc-hint">Pick a preset to pre-fill defaults, then customize below.</p>
+      </div>
+
+      <!-- Goal + Target -->
+      <div class="ntc-section">
+        <span class="ntc-label">Objective</span>
+        <div class="ntc-obj-row">
+          <div>
+            <select id="nt-goal-type" onchange="onGoalTypeChange()" style="width:100%;">
+              <option value="find_code_patch">Find code patch</option>
+              <option value="find_ram_address">Find RAM address</option>
+              <option value="static_research">Static research</option>
+            </select>
+            <p class="ntc-hint">What the agent produces.</p>
+          </div>
+          <div>
+            <textarea id="nt-target" rows="2" style="width:100%;" placeholder="e.g. Remove all HUD elements, Find player health address, Analyze collision system..."></textarea>
+            <p class="ntc-hint">Natural language description of the specific goal.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Evaluation -->
+      <div class="ntc-section">
+        <span class="ntc-label">Evaluation</span>
+        <select id="nt-evaluation" onchange="syncCapabilities()" style="width:100%;">
+          <option value="manual_review">Manual review</option>
+          <option value="pixel_diff_mask">Pixel diff mask</option>
+        </select>
+        <p class="ntc-hint">
+          <strong>Manual review</strong>: RE engineer judges the agent's findings.
+          <strong>Pixel diff</strong>: automated pass/fail by comparing frames against a painted mask.
+        </p>
+      </div>
+
+      <!-- Capabilities -->
+      <div class="ntc-section">
+        <span class="ntc-label">Agent capabilities</span>
+        <div class="cap-grid" id="nt-capabilities"></div>
+      </div>
+
+      <!-- Input Mutation Hints -->
+      <div class="ntc-section" id="nt-hints-section">
+        <span class="ntc-label">Input-mutation hints</span>
+        <p class="ntc-hint" style="margin-top:0; margin-bottom:0.5rem;">Tell the agent which controller inputs should change the target value, so it can verify candidates.</p>
+        <div id="nt-hints-list"></div>
+        <button onclick="addHintRow()" style="font-size:0.72rem; padding:0.25rem 0.6rem; margin-top:0.3rem;">+ add hint</button>
+      </div>
+
+      <!-- Budget -->
+      <div class="ntc-section">
+        <span class="ntc-label">Budget</span>
+        <div class="budget-row">
+          <div class="budget-field">
+            <label>Message limit</label>
+            <input type="number" id="nt-message-limit" value="200" min="50" max="1000">
+          </div>
+          <div class="budget-field">
+            <label>Gecko test runs</label>
+            <input type="number" id="nt-max-gecko" value="10" min="1" max="30">
+          </div>
+          <div class="budget-field">
+            <label>Run seconds</label>
+            <input type="number" id="nt-run-seconds" value="10" min="5" max="60">
+          </div>
+        </div>
+        <p class="ntc-hint">Message limit caps the total agent conversation. Gecko runs cap Dolphin test cycles. Run seconds is per Dolphin boot.</p>
+      </div>
+
+      <!-- Errors + Submit -->
+      <div id="nt-errors" style="color:var(--red); font-size:0.8rem; margin-bottom:0.5rem;" hidden></div>
+      <button onclick="submitNewTask()" class="primary">Create Task</button>
+    </div>
+  </div>
+
   <!-- Project detail: full-page split layout -->
   <div id="view-project" class="view proj-page">
     <div class="proj-topbar">
@@ -228,15 +316,7 @@
       <div class="proj-right">
         <div class="proj-panel-header">
           <h2>Tasks</h2>
-          <div class="btn-group">
-            <select id="preset-select" style="font-family:inherit; font-size:0.78rem; background:var(--surface); color:var(--text); border:1px solid var(--border); padding:0.3rem 0.5rem;">
-              <option value="hud_removal">HUD Removal</option>
-              <option value="position_finding">Position Finding</option>
-              <option value="noclip">Noclip</option>
-              <option value="research">Research</option>
-            </select>
-            <button onclick="createTaskFromPreset()">+ New Task</button>
-          </div>
+          <button onclick="location.hash=`#/project/${currentProjectId}/new-task`">+ New Task</button>
         </div>
 
         <div class="proj-panel-body">
@@ -346,8 +426,14 @@
       const projectMatch = hash.match(/^#\/project\/([a-f0-9]+)$/);
       const taskMatch = hash.match(/^#\/project\/([a-f0-9]+)\/task\/([a-f0-9]+)$/);
       const knowledgeMatch = hash.match(/^#\/project\/([a-f0-9]+)\/knowledge$/);
+      const newTaskMatch = hash.match(/^#\/project\/([a-f0-9]+)\/new-task$/);
 
-      if (taskMatch) {
+      if (newTaskMatch) {
+        currentProjectId = newTaskMatch[1];
+        currentTaskId = null;
+        document.getElementById('view-new-task').classList.add('active');
+        loadNewTaskPage();
+      } else if (taskMatch) {
         currentProjectId = taskMatch[1];
         currentTaskId = taskMatch[2];
         document.getElementById('view-task').classList.add('active');
@@ -869,17 +955,284 @@
       poll();
     }
 
-    async function createTaskFromPreset() {
-      const preset = document.getElementById('preset-select').value;
+    // ── New Task Creator ─────────────────────────────────────────── //
+
+    const PRESETS_CACHE = {};
+
+    async function loadNewTaskPage() {
+      const p = await api('GET', `/api/projects/${currentProjectId}`);
+      const bc = document.getElementById('new-task-breadcrumb');
+      bc.innerHTML = [
+        { text: 'Projects', href: '#/' },
+        { text: p.name || p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
+        { text: 'new task' },
+      ].map((part, i, arr) => {
+        if (i < arr.length - 1) return `<a href="${part.href}">${part.text}</a><span class="sep">/</span>`;
+        return `<span>${part.text}</span>`;
+      }).join('');
+
+      // Load presets
       try {
-        const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { preset });
+        const presets = await api('GET', '/api/presets');
+        const btnContainer = document.getElementById('preset-buttons');
+        btnContainer.innerHTML = presets.map(p =>
+          `<button onclick="applyPreset('${p.name}')" class="preset-btn" id="preset-btn-${p.name}" title="${p.description}">${p.name.replace(/_/g, ' ')}</button>`
+        ).join('');
+        presets.forEach(p => { PRESETS_CACHE[p.name] = p.job_spec; });
+      } catch (e) {
+        console.error('Failed to load presets:', e);
+      }
+
+      // Render capability cards and clear form
+      renderCapabilities();
+      syncCapabilities();
+      document.getElementById('nt-hints-list').innerHTML = '';
+      document.getElementById('nt-errors').hidden = true;
+
+    }
+
+    function applyPreset(name) {
+      const spec = PRESETS_CACHE[name];
+      if (!spec) return;
+
+      // Highlight active preset button
+      document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      const btn = document.getElementById(`preset-btn-${name}`);
+      if (btn) btn.classList.add('active');
+
+      // Goal type
+      document.getElementById('nt-goal-type').value = spec.goal_type;
+
+      // Target
+      document.getElementById('nt-target').value = spec.target_description || '';
+
+      // Capabilities
+      const caps = new Set(spec.capabilities || []);
+      document.querySelectorAll('#nt-capabilities input[type=checkbox]').forEach(cb => {
+        cb.checked = caps.has(cb.value);
+      });
+
+      // Evaluation
+      document.getElementById('nt-evaluation').value = spec.evaluation || 'manual_review';
+
+      // Budget
+      document.getElementById('nt-message-limit').value = spec.message_limit || 200;
+      document.getElementById('nt-max-gecko').value = spec.max_gecko_runs || 10;
+      document.getElementById('nt-run-seconds').value = spec.run_seconds || 10;
+
+      // Hints
+      const hintsList = document.getElementById('nt-hints-list');
+      hintsList.innerHTML = '';
+      (spec.input_mutation_hints || []).forEach(h => {
+        addHintRow(h.input_description, h.expected_effect);
+      });
+
+      onGoalTypeChange();
+    }
+
+    const CAP_DEFS = [
+      {
+        id: 'static_re',
+        name: 'Static RE',
+        desc: 'Ghidra-based binary analysis: decompile functions, search strings, trace call graphs, rename/annotate.',
+        tag: 'always on',
+      },
+      {
+        id: 'discovery',
+        name: 'ISO Discovery',
+        desc: 'Walk the disc filesystem, extract binaries, run Ghidra analysis. Lets the agent find and switch between executables.',
+        tag: 'always on',
+      },
+      {
+        id: 'gecko_injection',
+        name: 'Gecko Injection',
+        desc: 'Write and test Gecko cheat codes. The agent can apply codes to Dolphin and verify them against the game.',
+        requiredBy: { goal: ['find_code_patch'] },
+      },
+      {
+        id: 'ram_poke',
+        name: 'RAM Poke',
+        desc: 'Read/scan/diff live GameCube memory, set write watchpoints to find which code writes to an address. Requires a savestate.',
+        requiredBy: { goal: ['find_ram_address'] },
+        tag: 'runtime — needs savestate',
+      },
+      {
+        id: 'input_injection',
+        name: 'Input Injection',
+        desc: 'Send controller inputs to Dolphin: press buttons, hold sticks, sample position over time. Requires a savestate.',
+        tag: 'runtime — needs savestate',
+      },
+      {
+        id: 'frame_capture',
+        name: 'Frame Capture',
+        desc: 'Grab screenshots from the running Dolphin session for visual inspection.',
+        requiredBy: { eval: ['pixel_diff_mask'] },
+        tag: 'runtime — needs savestate',
+      },
+      {
+        id: 'pixel_diff',
+        name: 'Pixel Diff',
+        desc: 'Compare captured frames against a reference using a painted mask. Auto-enabled when evaluation is set to pixel diff mask.',
+        requiredBy: { eval: ['pixel_diff_mask'] },
+        requires: ['frame_capture'],
+      },
+    ];
+
+    function renderCapabilities() {
+      const container = document.getElementById('nt-capabilities');
+      container.innerHTML = CAP_DEFS.map(cap => `
+        <label class="cap-card" id="cap-item-${cap.id}" data-reason="">
+          <div class="cap-cb">
+            <input type="checkbox" value="${cap.id}" id="cap-cb-${cap.id}" onchange="syncCapabilities()">
+          </div>
+          <div class="cap-body">
+            <div class="cap-title">${cap.name}</div>
+            <div class="cap-detail">${cap.desc}</div>
+          </div>
+        </label>
+      `).join('');
+    }
+
+    function syncCapabilities() {
+      const goal = document.getElementById('nt-goal-type').value;
+      const eval_ = document.getElementById('nt-evaluation').value;
+
+      for (const cap of CAP_DEFS) {
+        const cb = document.getElementById(`cap-cb-${cap.id}`);
+        const card = document.getElementById(`cap-item-${cap.id}`);
+        let forced = false;
+        let reason = '';
+
+        // Always-on caps
+        if (cap.id === 'static_re' || cap.id === 'discovery') {
+          cb.checked = true;
+          cb.disabled = true;
+          forced = true;
+          reason = 'always on';
+        }
+
+        // Required by goal type
+        if (cap.requiredBy?.goal?.includes(goal)) {
+          cb.checked = true;
+          cb.disabled = true;
+          forced = true;
+          reason = 'required by goal';
+        }
+
+        // Required by evaluation method
+        if (cap.requiredBy?.eval?.includes(eval_)) {
+          cb.checked = true;
+          cb.disabled = true;
+          forced = true;
+          reason = 'required by eval';
+        }
+
+        // Dependencies
+        if (cap.requires) {
+          for (const dep of cap.requires) {
+            const depCb = document.getElementById(`cap-cb-${dep}`);
+            if (cb.checked && depCb && !depCb.checked) {
+              depCb.checked = true;
+            }
+          }
+        }
+
+        if (!forced) {
+          cb.disabled = false;
+        }
+
+        card.classList.toggle('cap-on', cb.checked);
+        card.classList.toggle('cap-locked', forced);
+        card.dataset.reason = forced ? reason : '';
+      }
+
+      // Show/hide hints section
+      document.getElementById('nt-hints-section').style.display =
+        goal === 'find_ram_address' ? '' : 'none';
+
+    }
+
+    function onGoalTypeChange() {
+      syncCapabilities();
+    }
+
+    const HINT_INPUT_OPTIONS = [
+      { group: 'Buttons', options: ['A', 'B', 'X', 'Y', 'Z', 'START'] },
+      { group: 'Triggers', options: ['L', 'R'] },
+      { group: 'D-Pad', options: ['D_UP', 'D_DOWN', 'D_LEFT', 'D_RIGHT'] },
+      { group: 'Main Stick', options: ['stick_main forward', 'stick_main backward', 'stick_main left', 'stick_main right'] },
+      { group: 'C-Stick', options: ['stick_c up', 'stick_c down', 'stick_c left', 'stick_c right'] },
+      { group: 'Other', options: ['wait (no input)'] },
+    ];
+
+    function _buildInputSelect(selected) {
+      let html = '<select class="hint-input" style="flex:1;">';
+      html += '<option value="">-- select input --</option>';
+      for (const g of HINT_INPUT_OPTIONS) {
+        html += `<optgroup label="${g.group}">`;
+        for (const o of g.options) {
+          const sel = o === selected ? ' selected' : '';
+          html += `<option value="${o}"${sel}>${o}</option>`;
+        }
+        html += '</optgroup>';
+      }
+      html += '</select>';
+      return html;
+    }
+
+    function addHintRow(inputDesc, expectedEffect) {
+      const list = document.getElementById('nt-hints-list');
+      const row = document.createElement('div');
+      row.className = 'hint-row';
+      row.innerHTML = `
+        ${_buildInputSelect(inputDesc || '')}
+        <span class="hint-arrow">→</span>
+        <input type="text" class="hint-effect" placeholder="Expected effect (e.g. value decreases by 1)" value="${expectedEffect || ''}">
+        <button onclick="this.parentElement.remove()" class="danger" style="padding:0.15rem 0.4rem; font-size:0.68rem;">x</button>
+      `;
+      list.appendChild(row);
+    }
+
+    function collectJobSpec() {
+      const capabilities = [];
+      document.querySelectorAll('#nt-capabilities input[type=checkbox]:checked').forEach(cb => {
+        capabilities.push(cb.value);
+      });
+
+      const hints = [];
+      document.querySelectorAll('#nt-hints-list > div').forEach(row => {
+        const input = row.querySelector('.hint-input').value.trim();
+        const effect = row.querySelector('.hint-effect').value.trim();
+        if (input && effect) hints.push({ input_description: input, expected_effect: effect });
+      });
+
+      return {
+        goal_type: document.getElementById('nt-goal-type').value,
+        capabilities: capabilities,
+        evaluation: document.getElementById('nt-evaluation').value,
+        target_description: document.getElementById('nt-target').value.trim(),
+        input_mutation_hints: hints,
+        message_limit: parseInt(document.getElementById('nt-message-limit').value),
+        max_gecko_runs: parseInt(document.getElementById('nt-max-gecko').value),
+        run_seconds: parseInt(document.getElementById('nt-run-seconds').value),
+      };
+    }
+
+    async function submitNewTask() {
+      const spec = collectJobSpec();
+      const errEl = document.getElementById('nt-errors');
+      errEl.hidden = true;
+
+      try {
+        const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { job_spec: spec });
         location.hash = `#/project/${currentProjectId}/task/${result.task_id}`;
       } catch (e) {
-        alert('Failed to create task: ' + e.message);
+        errEl.textContent = e.message;
+        errEl.hidden = false;
       }
     }
 
-    // Legacy support for any remaining callers
+    // Legacy support
     async function createTask(taskType) {
       try {
         const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { type: taskType });
