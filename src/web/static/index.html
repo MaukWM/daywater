@@ -199,7 +199,10 @@
             <span id="ss-detail-id" hidden></span>
 
             <div id="ss-findings-section" style="margin-top:0.75rem;" hidden>
-              <h3 style="font-size:0.78rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem;">Findings</h3>
+              <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+                <h3 style="font-size:0.78rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin:0;">Findings</h3>
+                <button class="danger" style="padding:0.1rem 0.4rem; font-size:0.65rem;" onclick="clearSavestateFindings()">Clear All</button>
+              </div>
               <table class="kb-table" id="ss-findings-table"></table>
             </div>
             <div id="ss-no-findings" style="margin-top:0.5rem; color:var(--text-dim); font-size:0.78rem;">No findings for this savestate.</div>
@@ -223,6 +226,7 @@
             <button onclick="createTask('hud_detection')">+ HUD</button>
             <button onclick="createTask('research')">+ Research</button>
             <button onclick="createTask('position_discovery')">+ Position</button>
+            <button onclick="createTask('noclip')">+ Noclip</button>
           </div>
         </div>
 
@@ -675,7 +679,10 @@
         const listEl = document.getElementById('kb-file-list');
         const allDocs = ['INDEX.md', ...res.docs];
         listEl.innerHTML = allDocs.map(d =>
-          `<div style="padding:0.5rem 1rem; cursor:pointer; user-select:none; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text);" class="kb-file-item" onclick="openKbDoc('${d}')" id="kb-file-${d.replace('.','_')}">${d}</div>`
+          `<div style="padding:0.5rem 1rem; cursor:pointer; user-select:none; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text); display:flex; align-items:center; justify-content:space-between;" class="kb-file-item" id="kb-file-${d.replace('.','_')}">
+            <span onclick="openKbDoc('${d}')" style="flex:1">${d}</span>
+            ${d !== 'INDEX.md' ? `<button class="danger" style="padding:0.05rem 0.3rem; font-size:0.65rem; flex-shrink:0;" onclick="event.stopPropagation(); deleteResearchDoc('${d}')">x</button>` : ''}
+          </div>`
         ).join('');
         // Open INDEX.md by default
         if (allDocs.length) openKbDoc('INDEX.md');
@@ -756,6 +763,16 @@
         emptyEl.hidden = hasContent;
       } catch (e) {
         console.error('Failed to load annotations:', e);
+      }
+    }
+
+    async function deleteResearchDoc(filename) {
+      if (!confirm(`Delete research doc "${filename}"?`)) return;
+      try {
+        await api('DELETE', `/api/projects/${currentProjectId}/research/${filename}`);
+        loadKbResearch();
+      } catch (e) {
+        alert('Delete failed: ' + e.message);
       }
     }
 
@@ -945,6 +962,18 @@
       }
     }
 
+    async function clearSavestateFindings() {
+      const ssId = currentSavestateId;
+      if (!ssId) return;
+      if (!confirm('Delete ALL findings for this savestate?')) return;
+      try {
+        await api('DELETE', `/api/projects/${currentProjectId}/savestates/${ssId}/findings`);
+        loadSavestateFindings(ssId);
+      } catch (e) {
+        alert('Clear failed: ' + e.message);
+      }
+    }
+
     async function saveSavestateNotes() {
       if (!currentSavestateId) return;
       try {
@@ -1127,6 +1156,7 @@
         const state = t.state;
         const isResearch = t.task_type === 'research';
         const isPosition = t.task_type === 'position_discovery';
+        const isNoclip = t.task_type === 'noclip';
 
         if (isResearch) {
           // Research tasks: hide upload steps, show only run + results
@@ -1152,14 +1182,16 @@
           return;
         }
 
-        if (isPosition) {
-          // Position discovery: savestate selector + run, no screenshot/mask
+        if (isPosition || isNoclip) {
+          // Position discovery / noclip: savestate selector + run, no screenshot/mask
           document.getElementById('step-screenshot').hidden = true;
           document.getElementById('step-mask').hidden = true;
           // Renumber visible steps: 01=savestate, 02=run, 03=results
           document.querySelector('#step-run .step-num').textContent = '02';
           document.querySelector('#step-results .step-num').textContent = '03';
-          const defaultHint = 'Find the exact RAM addresses for player X, Y, Z position.';
+          const defaultHint = isNoclip
+            ? 'Create a Gecko code that enables noclip / freecam. Use research docs and position findings.'
+            : 'Find the exact RAM addresses for player X, Y, Z position.';
           document.getElementById('hint-input').value = (t.hint && t.hint !== 'Remove all HUD elements marked in the mask.') ? t.hint : defaultHint;
           document.getElementById('budget-input').parentElement.parentElement.hidden = true;
           document.getElementById('run-seconds-input').parentElement.parentElement.hidden = true;
@@ -1287,8 +1319,8 @@
         // Reload task to get current state, then route by task type.
         const t = await api('GET', `${taskPath()}`);
 
-        if (t.task_type === 'position_discovery') {
-          // Position discovery: go straight to run.
+        if (t.task_type === 'position_discovery' || t.task_type === 'noclip') {
+          // Position discovery / noclip: go straight to run.
           unlockStep('step-run');
         } else if (result.has_reference) {
           // HUD: screenshot was already rendered — skip capture, go to mask.

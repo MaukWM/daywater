@@ -376,6 +376,18 @@ async def delete_savestate_finding(
     return {"ok": True}
 
 
+@app.delete("/api/projects/{project_id}/savestates/{savestate_id}/findings")
+async def clear_savestate_findings(
+    project_id: str, savestate_id: str,
+) -> dict[str, bool]:
+    """Delete all findings for a savestate."""
+    _, ss = _get_savestate(project_id, savestate_id)
+    fs = FindingsStore.load(ss.root)
+    fs.findings.clear()
+    fs._flush()
+    return {"ok": True}
+
+
 # ── Task savestate selection ─────────────────────────────────────────── #
 
 
@@ -473,6 +485,12 @@ async def start_run(project_id: str, task_id: str, background_tasks: BackgroundT
     if task.config.task_type == "position_discovery" and task.state != TaskState.READY:
         if not task.config.savestate_id:
             raise HTTPException(400, "Position discovery requires a savestate")
+        task.transition(TaskState.READY)
+
+    # Noclip: needs a savestate, skip visual steps.
+    if task.config.task_type == "noclip" and task.state != TaskState.READY:
+        if not task.config.savestate_id:
+            raise HTTPException(400, "Noclip requires a savestate")
         task.transition(TaskState.READY)
 
     if task.state != TaskState.READY:
@@ -621,6 +639,20 @@ async def get_research_doc(project_id: str, filename: str) -> dict:  # type: ign
     if not path.exists() or not path.resolve().is_relative_to(research_dir.resolve()):
         raise HTTPException(404, f"Document {filename} not found")
     return {"filename": filename, "content": path.read_text()}
+
+
+@app.delete("/api/projects/{project_id}/research/{filename}")
+async def delete_research_doc(project_id: str, filename: str) -> dict[str, bool]:
+    """Delete a single research document."""
+    project = _get_project(project_id)
+    research_dir = project.root / "research"
+    path = research_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(research_dir.resolve()):
+        raise HTTPException(404, f"Document {filename} not found")
+    if filename == "INDEX.md":
+        raise HTTPException(400, "Cannot delete INDEX.md")
+    path.unlink()
+    return {"ok": True}
 
 
 @app.get("/api/projects/{project_id}/knowledge")

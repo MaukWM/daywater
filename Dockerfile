@@ -15,6 +15,7 @@ RUN apt-get update \
       dolphin-emu \
       xvfb \
       xauth \
+      xdotool \
       ffmpeg \
       libgl1-mesa-dri \
       mesa-utils \

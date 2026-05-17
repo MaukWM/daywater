@@ -3,12 +3,18 @@
 These tools wrap a live DolphinSession and are used by tasks that need runtime
 access (position discovery, noclip). Each tool is a closure capturing the
 session reference.
+
+For noclip tasks, tools bind to a ``SessionRef`` instead of a raw session.
+``SessionRef`` is a mutable proxy — when ``apply_gecko_code`` reboots Dolphin,
+all tools transparently see the new session.
 """
 
 from __future__ import annotations
 
+import base64
 import time
 from pathlib import Path
+from typing import Any
 
 from inspect_ai.tool import Tool, tool
 
@@ -16,12 +22,49 @@ from src.dolphin.input import InputCommand, InputSequence
 from src.dolphin.memory import scan_floats_in_range
 from src.dolphin.session import DolphinSession
 from src.findings import FindingsStore
+from src.logging import logger
+
+
+class SessionRef:
+    """Mutable proxy to a :class:`DolphinSession`.
+
+    Attribute access is forwarded to the underlying session so existing tools
+    (which expect ``DolphinSession``) work without changes.  The noclip task
+    calls :meth:`swap` when it reboots Dolphin with new Gecko codes.
+    """
+
+    def __init__(self, session: DolphinSession) -> None:
+        # Store in object __dict__ directly to avoid __getattr__ recursion.
+        object.__setattr__(self, "_session", session)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_session"), name)
+
+    @property
+    def session(self) -> DolphinSession:
+        return object.__getattribute__(self, "_session")
+
+    def swap(self, new_session: DolphinSession) -> None:
+        object.__setattr__(self, "_session", new_session)
+
 
 # Valid GC buttons for the pipe protocol.
-GC_BUTTONS = frozenset({
-    "A", "B", "X", "Y", "Z", "START", "L", "R",
-    "D_UP", "D_DOWN", "D_LEFT", "D_RIGHT",
-})
+GC_BUTTONS = frozenset(
+    {
+        "A",
+        "B",
+        "X",
+        "Y",
+        "Z",
+        "START",
+        "L",
+        "R",
+        "D_UP",
+        "D_DOWN",
+        "D_LEFT",
+        "D_RIGHT",
+    }
+)
 
 # Valid stick names.
 GC_STICKS = frozenset({"MAIN", "C"})
@@ -144,8 +187,11 @@ def scan_memory(session: DolphinSession) -> Tool:
 
         try:
             results = scan_floats_in_range(
-                session.pid, gc_start, gc_end,
-                min_abs=min_abs, max_abs=max_abs,
+                session.pid,
+                gc_start,
+                gc_end,
+                min_abs=min_abs,
+                max_abs=max_abs,
             )
         except Exception as e:
             return f"Error during scan: {e}"
@@ -246,9 +292,7 @@ def scan_memory_diff(session: DolphinSession) -> Tool:
         changed.sort(key=lambda x: x[3], reverse=True)
         lines = [f"Found {len(changed)} addresses that changed:"]
         for addr, old_v, new_v, delta in changed[:50]:
-            lines.append(
-                f"  0x{addr:08X}: {old_v:+.4f} -> {new_v:+.4f} (delta={delta:.4f})"
-            )
+            lines.append(f"  0x{addr:08X}: {old_v:+.4f} -> {new_v:+.4f} (delta={delta:.4f})")
         if len(changed) > 50:
             lines.append(f"  ... and {len(changed) - 50} more")
         return "\n".join(lines)
@@ -279,10 +323,12 @@ def press_button(session: DolphinSession) -> Tool:
         if duration < 0.05:
             return "Error: duration must be at least 0.05 seconds."
 
-        seq = InputSequence(commands=[
-            InputCommand(0.0, f"PRESS {btn}"),
-            InputCommand(duration, f"RELEASE {btn}"),
-        ])
+        seq = InputSequence(
+            commands=[
+                InputCommand(0.0, f"PRESS {btn}"),
+                InputCommand(duration, f"RELEASE {btn}"),
+            ]
+        )
         try:
             session.play_sequence(seq)
         except Exception as e:
@@ -330,10 +376,12 @@ def set_stick(session: DolphinSession) -> Tool:
         if not (0.0 <= x <= 1.0 and 0.0 <= y <= 1.0):
             return "Error: x and y must be in range 0.0–1.0."
 
-        seq = InputSequence(commands=[
-            InputCommand(0.0, f"SET {stick_name} {x:.3f} {y:.3f}"),
-            InputCommand(duration, f"SET {stick_name} 0.500 0.500"),
-        ])
+        seq = InputSequence(
+            commands=[
+                InputCommand(0.0, f"SET {stick_name} {x:.3f} {y:.3f}"),
+                InputCommand(duration, f"SET {stick_name} 0.500 0.500"),
+            ]
+        )
         try:
             session.play_sequence(seq)
         except Exception as e:
@@ -546,5 +594,160 @@ def list_savestate_findings(savestate_root: Path) -> Tool:
         if not store.findings:
             return "No savestate findings yet."
         return store.format_table()
+
+    return execute
+
+
+# ── Screenshot helper ────────────────────────────────────────────────── #
+
+
+def _capture_frame_content(session_ref: SessionRef) -> Any | None:
+    """Grab the latest dumped frame from Dolphin as a ContentImage.
+
+    Re-encodes through Pillow to fix truncated/corrupt PNGs that Dolphin's
+    Software renderer can produce (frames written mid-render).
+    """
+    import io
+
+    from inspect_ai.model import ContentImage
+    from PIL import Image
+
+    session = session_ref.session
+    frames_dir = session.user_dir / "Dump" / "Frames"
+    frames = sorted(frames_dir.glob("*.png"))
+    if not frames:
+        return None
+    try:
+        img = Image.open(frames[-1])
+        img.load()  # force full decode — catches truncated files
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        return ContentImage(image=f"data:image/png;base64,{b64}")
+    except Exception:
+        logger.warning("frame_capture_failed", path=str(frames[-1]))
+        return None
+
+
+# ── Noclip-specific tools ────────────────────────────────────────────── #
+
+
+@tool
+def capture_screenshot(session_ref: SessionRef) -> Tool:
+    """Build a screenshot capture tool bound to a SessionRef."""
+
+    async def execute() -> list[Any] | str:
+        """Capture the current Dolphin frame as an image.
+
+        Returns a screenshot of the game's current visual state. Use this
+        to visually inspect what's happening after applying codes or input.
+        """
+        frame = _capture_frame_content(session_ref)
+        if frame is None:
+            return "No frames available — Dolphin may not be rendering."
+        from inspect_ai.model import ContentText
+
+        return [ContentText(text="Screenshot captured."), frame]
+
+    return execute
+
+
+@tool
+def apply_gecko_code(
+    session_ref: SessionRef,
+    iso_path: Path,
+    savestate_path: Path,
+) -> Tool:
+    """Build a tool that reboots Dolphin with a Gecko code applied."""
+
+    async def execute(gecko_text: str) -> list[Any] | str:
+        """Reboot Dolphin from the savestate with a Gecko code applied.
+
+        This terminates the current Dolphin session and starts a new one
+        with your Gecko code injected. All runtime tools (memory, input,
+        position) will work on the new session. Returns a screenshot.
+
+        Args:
+            gecko_text: Gecko code text. Use $Name headers and hex-pair lines.
+                Example: "$Noclip\\n042967F0 00000001"
+        """
+        from src.dolphin.gecko import parse_gecko
+
+        codes = parse_gecko(gecko_text)
+        if not codes:
+            return "Error: no valid Gecko codes found. Use $Name header + hex lines."
+
+        code_summary = ", ".join(f"${c.name} ({len(c.lines)} lines)" for c in codes)
+        logger.info("apply_gecko_code", codes=code_summary)
+
+        # Terminate old session
+        old_session = session_ref.session
+        try:
+            old_session.terminate()
+            old_session.cleanup()
+        except Exception:
+            pass
+
+        # Boot new session with gecko codes
+        session_cm = DolphinSession.start(
+            iso=iso_path,
+            savestate=savestate_path,
+            gecko_codes=codes,
+            pipe_input=True,
+        )
+        new_session = session_cm.__enter__()
+
+        # Store the context manager on the session for cleanup
+        object.__setattr__(new_session, "_noclip_cm", session_cm)
+
+        if not new_session.wait_for_first_frame():
+            return "Error: Dolphin failed to produce frames after reboot."
+
+        session_ref.swap(new_session)
+
+        # Wait for game to settle
+        time.sleep(2.0)
+
+        frame = _capture_frame_content(session_ref)
+        from inspect_ai.model import ContentText
+
+        parts: list[Any] = [
+            ContentText(
+                text=(f"Gecko codes applied: {code_summary}. Dolphin rebooted from savestate. Game is running.")
+            ),
+        ]
+        if frame is not None:
+            parts.append(frame)
+        return parts
+
+    return execute
+
+
+@tool
+def save_noclip_code(task_root: Path) -> Tool:
+    """Build a tool that saves the final working Gecko code to the task."""
+
+    async def execute(gecko_text: str) -> str:
+        """Save the final working Gecko code for the scorer to verify.
+
+        Call this after you've confirmed the code works. The deterministic
+        scorer reads this file to run its own independent verification.
+
+        Args:
+            gecko_text: The complete Gecko code text (with $Name headers).
+        """
+        from src.dolphin.gecko import parse_gecko
+
+        codes = parse_gecko(gecko_text)
+        if not codes:
+            return "Error: no valid Gecko codes found."
+
+        code_path = task_root / "noclip_code.txt"
+        code_path.write_text(gecko_text)
+        logger.info("noclip_code_saved", path=str(code_path), codes=len(codes))
+        return (
+            f"Saved {len(codes)} Gecko code(s) to {code_path.name}. "
+            f"The scorer will use this for deterministic verification."
+        )
 
     return execute
