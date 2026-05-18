@@ -166,7 +166,12 @@
     <!-- ═══════════════════════════════════════════════════════════════ -->
     <!-- VIEW: Task wizard                                              -->
     <!-- ═══════════════════════════════════════════════════════════════ -->
-    <div id="view-task" class="view">
+    <div id="view-task" class="view task-page">
+      <div class="proj-topbar">
+        <nav class="breadcrumb" id="task-breadcrumb"></nav>
+        <div class="proj-info-row" id="task-proj-identity"></div>
+      </div>
+      <div class="task-page-body">
 
       <!-- Step 1: Select Savestate -->
       <section id="step-savestate" class="step active">
@@ -283,14 +288,19 @@
           </div>
         </div>
       </section>
+      </div><!-- /task-page-body -->
     </div>
   </main>
 
   <!-- ═══════════════════════════════════════════════════════════════ -->
   <!-- VIEW: New Task Creator                                         -->
   <!-- ═══════════════════════════════════════════════════════════════ -->
-  <div id="view-new-task" class="view">
-    <nav class="breadcrumb" id="new-task-breadcrumb"></nav>
+  <div id="view-new-task" class="view task-page">
+    <div class="proj-topbar">
+      <nav class="breadcrumb" id="new-task-breadcrumb"></nav>
+      <div class="proj-info-row" id="new-task-proj-identity"></div>
+    </div>
+    <div class="task-page-body">
     <div class="ntc">
       <h2>Create Task</h2>
       <p class="ntc-subtitle">Configure what the agent should do, which tools it gets, and how it's evaluated.</p>
@@ -372,6 +382,7 @@
       <div id="nt-errors" style="color:var(--red); font-size:0.8rem; margin-bottom:0.5rem;" hidden></div>
       <button onclick="submitNewTask()" class="primary">Create Task</button>
     </div>
+    </div><!-- /task-page-body -->
   </div>
 
   <!-- Project detail: full-page split layout -->
@@ -1249,15 +1260,29 @@
 
     async function loadNewTaskPage() {
       const p = await api('GET', `/api/projects/${currentProjectId}`);
+      const displayName = p.name || p.game_id || currentProjectId;
+
       const bc = document.getElementById('new-task-breadcrumb');
       bc.innerHTML = [
         { text: 'Projects', href: '#/' },
-        { text: p.name || p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
+        { text: displayName, href: `#/project/${currentProjectId}` },
         { text: 'new task' },
       ].map((part, i, arr) => {
         if (i < arr.length - 1) return `<a href="${part.href}">${part.text}</a><span class="sep">/</span>`;
         return `<span>${part.text}</span>`;
       }).join('');
+
+      const identityEl = document.getElementById('new-task-proj-identity');
+      const surveyText = p.survey_complete
+        ? `<span class="proj-tag green">${p.survey_binaries_done} binaries</span>`
+        : `<span class="proj-tag amber">analyzing ${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}</span>`;
+      identityEl.innerHTML = `
+        <span class="proj-game-id">${displayName}</span>
+        <span class="proj-meta">${p.game_id}</span>
+        <span class="proj-meta">${p.iso_sha1 ? p.iso_sha1.slice(0, 12) : ''}</span>
+        <span class="proj-meta">${p.iso_size ? (p.iso_size / 1e6).toFixed(0) + ' MB' : ''}</span>
+        ${surveyText}
+      `;
 
       // Load presets
       try {
@@ -2244,20 +2269,31 @@
     async function loadTask() {
       resetSteps();
 
-      setBreadcrumb([
-        { text: 'Projects', href: '#/' },
-        { text: '...', href: `#/project/${currentProjectId}` },
-        { text: 'task ' + currentTaskId, href: `#/project/${currentProjectId}/task/${currentTaskId}` },
-      ]);
-
       try {
-        // Load project info for breadcrumb.
+        // Load project info for topbar.
         const p = await api('GET', `/api/projects/${currentProjectId}`);
-        setBreadcrumb([
+        const displayName = p.name || p.game_id || currentProjectId;
+        const taskBc = document.getElementById('task-breadcrumb');
+        taskBc.innerHTML = [
           { text: 'Projects', href: '#/' },
-          { text: p.game_id || currentProjectId, href: `#/project/${currentProjectId}` },
-          { text: 'task ' + currentTaskId, href: `#/project/${currentProjectId}/task/${currentTaskId}` },
-        ]);
+          { text: displayName, href: `#/project/${currentProjectId}` },
+          { text: 'task ' + currentTaskId.slice(0, 8) },
+        ].map((part, i, arr) => {
+          if (i < arr.length - 1) return `<a href="${part.href}">${part.text}</a><span class="sep">/</span>`;
+          return `<span>${part.text}</span>`;
+        }).join('');
+
+        const identityEl = document.getElementById('task-proj-identity');
+        const surveyText = p.survey_complete
+          ? `<span class="proj-tag green">${p.survey_binaries_done} binaries</span>`
+          : `<span class="proj-tag amber">analyzing ${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}</span>`;
+        identityEl.innerHTML = `
+          <span class="proj-game-id">${displayName}</span>
+          <span class="proj-meta">${p.game_id}</span>
+          <span class="proj-meta">${p.iso_sha1 ? p.iso_sha1.slice(0, 12) : ''}</span>
+          <span class="proj-meta">${p.iso_size ? (p.iso_size / 1e6).toFixed(0) + ' MB' : ''}</span>
+          ${surveyText}
+        `;
 
         const t = await api('GET', `/api/projects/${currentProjectId}/tasks/${currentTaskId}`);
         surveyComplete = t.survey_complete || false;
