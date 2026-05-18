@@ -1385,15 +1385,16 @@
       {
         id: 'pixel_diff',
         name: 'Pixel Diff',
-        desc: 'Compare captured frames against a reference using a painted mask. Auto-enabled when evaluation is set to pixel diff mask.',
+        desc: 'Compare captured frames against a reference using a painted mask.',
         requiredBy: { eval: ['pixel_diff_mask'] },
         requires: ['frame_capture'],
+        hidden: true,  // Auto-included with pixel_diff_mask eval, not shown in UI
       },
     ];
 
     function renderCapabilities() {
       const container = document.getElementById('nt-capabilities');
-      container.innerHTML = CAP_DEFS.map(cap => `
+      container.innerHTML = CAP_DEFS.filter(cap => !cap.hidden).map(cap => `
         <label class="cap-card" id="cap-item-${cap.id}" data-reason="">
           <div class="cap-cb">
             <input type="checkbox" value="${cap.id}" id="cap-cb-${cap.id}" onchange="syncCapabilities()">
