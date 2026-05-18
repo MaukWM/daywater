@@ -8,6 +8,7 @@ from src.agent.prompts.shared import (
     TOOLS_ANNOTATION,
     TOOLS_BINARY_DISCOVERY,
     TOOLS_FINDINGS,
+    TOOLS_GECKO_KB,
     TOOLS_PPC_ASM,
     TOOLS_RESEARCH,
     TOOLS_RUNTIME,
@@ -53,6 +54,7 @@ def build_system_prompt(spec: JobSpec, *, controller_mapping: str = "") -> str:
         else:
             sections.append(_tools_interactive_gecko())
         sections.append(TOOLS_PPC_ASM)
+        sections.append(TOOLS_GECKO_KB)
 
     if Capability.RAM_POKE in spec.capabilities or Capability.INPUT_INJECTION in spec.capabilities:
         sections.append(TOOLS_RUNTIME)
@@ -137,7 +139,9 @@ def _tools_interactive_gecko() -> str:
         "Format: one or more `$Name` blocks followed by hex-pair lines. "
         "After rebooting, all runtime tools (memory, input, position) work on "
         "the new session.\n"
-        "- `save_gecko_code(gecko_text)` — persist your final working Gecko code. "
+        "- `save_gecko_code(gecko_text, description)` — persist your final working Gecko code. "
+        "Include a description explaining what the code does, what it patches, "
+        "and any controls/caveats — this is shown to future tasks and in the UI. "
         "Call this ONLY after you've confirmed the code works.\n"
         "- `capture_screenshot()` — grab the current Dolphin frame as an image. "
         "Useful for visual inspection during testing."

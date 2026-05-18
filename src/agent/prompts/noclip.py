@@ -3,6 +3,7 @@
 from src.agent.prompts.shared import (
     SUBMISSION_DOCUMENT,
     TOOLS_ALL_STATIC,
+    TOOLS_GECKO_KB,
     TOOLS_PPC_ASM,
     TOOLS_RUNTIME,
     TOOLS_SAVESTATE_FINDINGS,
@@ -17,7 +18,8 @@ TOOLS_GECKO = """\
   Example: `$Noclip\\n042967F0 00000001`. \
   After rebooting, all runtime tools (memory, input, position) work on \
   the new session.
-- `save_noclip_code(gecko_text)` — persist your final working Gecko code. \
+- `save_noclip_code(gecko_text, description)` — persist your final working Gecko code. \
+  Include a description of what it does, what it patches, and controls. \
   Call this ONLY after you've confirmed the code works via position sampling. \
   The scorer reads this to run its own deterministic verification.
 - `capture_screenshot()` — grab the current Dolphin frame as an image. \
@@ -87,6 +89,8 @@ of the same game, not just the one you're testing with. This means:
 
 {TOOLS_PPC_ASM}
 
+{TOOLS_GECKO_KB}
+
 {TOOLS_ALL_STATIC}
 
 {TOOLS_RUNTIME}
@@ -133,10 +137,10 @@ behavior (NOP a collision call, set a global debug flag, etc.).
 
 ### Step 1: Read prior knowledge
 
-Call `list_research()` and `read_research()` on any noclip/collision docs. \
-Call `list_findings()` and `list_savestate_findings()` to get position \
-addresses and other discoveries. **Do not skip this** — the research docs \
-likely describe the exact mechanism.
+Call `list_research()`, `list_findings()`, `list_gecko_codes()`, and \
+`list_savestate_findings()`. Read any relevant research docs and retrieve \
+any saved Gecko codes — a previous task may have built something you can \
+reuse or iterate on. **Do not skip this.**
 
 ### Step 2: Synthesize a Gecko code
 

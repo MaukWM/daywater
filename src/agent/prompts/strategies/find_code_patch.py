@@ -100,8 +100,10 @@ STRATEGY_INTERACTIVE = """\
 
 ### Step 1: Read prior knowledge
 
-Call `list_research()` and `list_findings()` to see what earlier tasks \
-discovered. Research docs may describe the exact mechanism you need.
+Call `list_research()`, `list_findings()`, and `list_gecko_codes()` to see \
+what earlier tasks discovered. If saved Gecko codes exist, use \
+`read_gecko_code(name)` to retrieve them — you may be able to reuse or \
+iterate on existing codes instead of starting from scratch. Research docs may describe the exact mechanism you need.
 
 ### Step 2: Look for a built-in debug/noclip mode FIRST
 
@@ -151,10 +153,15 @@ If the code doesn't produce the expected behavior:
 - Verify the address is correct and the value was written.
 - Try a different approach (NOP collision vs setting a flag, etc.).
 - Use `decompile()` to find the exact branch or call to patch.
+- **Save useful intermediate codes** along the way — if you find a \
+  working collision bypass or debug flag toggle that's not the final \
+  answer but is useful, `save_gecko_code` it with a description. \
+  Future tasks can build on these.
 
 ### Step 6: Save and document
 
-Only after confirming the code works:
-1. Save the working Gecko code.
+After confirming the code works:
+1. Save ALL useful Gecko codes via `save_gecko_code(gecko_text, description)` \
+   — the final answer AND any intermediate codes worth keeping.
 2. Document what you learned via `save_finding` and `write_research`.
 3. Submit a summary of the code, what it patches, and how you verified it."""

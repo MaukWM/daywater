@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import shutil
 import tempfile
 from pathlib import Path
@@ -831,6 +832,78 @@ async def delete_research_doc(project_id: str, filename: str) -> dict[str, bool]
     _save_meta(research_dir, meta)
 
     return {"ok": True}
+
+
+# ── Gecko codes knowledge base ─────────────────────────────────────── #
+
+
+@app.get("/api/projects/{project_id}/gecko-codes")
+async def get_gecko_codes(project_id: str) -> dict:  # type: ignore[type-arg]
+    """List all saved Gecko codes with metadata."""
+    project = _get_project(project_id)
+    gecko_dir = project.root / "gecko_codes"
+
+    codes: list[dict[str, str]] = []
+    if gecko_dir.is_dir():
+        meta = _load_gecko_meta(gecko_dir)
+        for f in sorted(gecko_dir.glob("*.gecko")):
+            entry = meta.get(f.name, {})
+            text = f.read_text().strip()
+            # First line is $Name
+            name = text.splitlines()[0].lstrip("$") if text else f.stem
+            body_lines = [l for l in text.splitlines() if not l.startswith("$")]
+            codes.append({
+                "filename": f.name,
+                "name": name,
+                "lines": len(body_lines),
+                "description": entry.get("description", ""),
+                "task_id": entry.get("task_id", ""),
+                "created_at": entry.get("created_at", ""),
+            })
+    return {"codes": codes}
+
+
+@app.get("/api/projects/{project_id}/gecko-codes/{filename}")
+async def get_gecko_code(project_id: str, filename: str) -> dict:  # type: ignore[type-arg]
+    """Return a single Gecko code file."""
+    project = _get_project(project_id)
+    gecko_dir = project.root / "gecko_codes"
+    path = gecko_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(gecko_dir.resolve()):
+        raise HTTPException(404, f"Gecko code {filename} not found")
+    meta = _load_gecko_meta(gecko_dir)
+    entry = meta.get(filename, {})
+    return {
+        "filename": filename,
+        "content": path.read_text(),
+        "description": entry.get("description", ""),
+    }
+
+
+@app.delete("/api/projects/{project_id}/gecko-codes/{filename}")
+async def delete_gecko_code(project_id: str, filename: str) -> dict[str, bool]:
+    """Delete a saved Gecko code."""
+    project = _get_project(project_id)
+    gecko_dir = project.root / "gecko_codes"
+    path = gecko_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(gecko_dir.resolve()):
+        raise HTTPException(404, f"Gecko code {filename} not found")
+    path.unlink()
+    meta = _load_gecko_meta(gecko_dir)
+    meta.pop(filename, None)
+    _save_gecko_meta(gecko_dir, meta)
+    return {"ok": True}
+
+
+def _load_gecko_meta(gecko_dir: Path) -> dict:  # type: ignore[type-arg]
+    meta_path = gecko_dir / ".gecko_meta.json"
+    if meta_path.exists():
+        return json.loads(meta_path.read_text())
+    return {}
+
+
+def _save_gecko_meta(gecko_dir: Path, meta: dict) -> None:  # type: ignore[type-arg]
+    (gecko_dir / ".gecko_meta.json").write_text(json.dumps(meta, indent=2))
 
 
 @app.get("/api/projects/{project_id}/knowledge")

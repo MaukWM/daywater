@@ -18,10 +18,11 @@ _CALL_COUNT_KEY = "daywater_tool_call_count"
 WINDDOWN_WARNING = (
     "\n\n⚠️ BUDGET CRITICAL — You are almost out of messages. "
     "STOP all exploration. You MUST now:\n"
-    "1. save_finding() for each discovery\n"
-    "2. save_savestate_finding() for runtime addresses\n"
-    "3. write_research(filename, content, summary) to document analysis\n"
-    "4. submit() with a summary\n"
+    "1. save_gecko_code(gecko_text, description) if you have a working code\n"
+    "2. save_finding() for each discovery\n"
+    "3. save_savestate_finding() for runtime addresses\n"
+    "4. write_research(filename, content, summary) to document analysis\n"
+    "5. submit() with a summary\n"
     "Any further exploratory calls are wasted. Save your work NOW."
 )
 

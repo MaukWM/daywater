@@ -123,10 +123,14 @@ figured out."""
 SUBMISSION_DOCUMENT = """\
 Before submitting your final answer, **document what you learned**:
 
-1. **Save structured findings** via `save_finding` — every function \
+1. **Save your working Gecko code** via `save_gecko_code(gecko_text, description)` \
+   — if you produced a working Gecko code, save it FIRST with a description \
+   explaining what it does, what it patches, and any controls or caveats. \
+   This stores it in the project knowledge base for future tasks to reuse.
+2. **Save structured findings** via `save_finding` — every function \
    you identified (kind="function"), memory addresses (kind="address"), \
    and key observations (kind="note").
-2. **Write a research doc** via `write_research(filename, content, summary)` \
+3. **Write a research doc** via `write_research(filename, content, summary)` \
    — a document summarizing your analysis: what you explored, what the \
    call graph looks like, what you tried and why it worked or didn't, \
    and what questions remain. Include a concise summary — it appears in \
@@ -190,6 +194,21 @@ TOOLS_PPC_ASM = """\
   Make sure you've called `switch_binary()` before using this tool. \
   Returns a complete `$Name` Gecko block ready for `apply_gecko_code`. \
   **Use C2 hooks for any patch more complex than a simple NOP/BLR.**"""
+
+TOOLS_GECKO_KB = """\
+### Saved Gecko codes (project knowledge base)
+
+- `save_gecko_code(gecko_text, description)` — save a Gecko code to the \
+  project knowledge base. Include a description of what it does, what it \
+  patches, and any controls or caveats. **Save any code worth keeping** — \
+  not just the final answer, but also useful intermediate codes (e.g. a \
+  collision bypass, a debug flag toggle, a diagnostic hook) that future \
+  tasks could build on. You can call this at any time, not just at the end.
+- `list_gecko_codes()` — list all Gecko codes saved by previous tasks.
+- `read_gecko_code(name)` — retrieve a saved Gecko code by name. Returns \
+  the full code text ready for `apply_gecko_code`. **Check this at the \
+  start of a run** — a previous task may have already built a working \
+  code you can use or iterate on."""
 
 TOOLS_SAVESTATE_FINDINGS = """\
 ### Savestate findings (runtime-specific, scoped to this savestate)

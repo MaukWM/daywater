@@ -113,8 +113,9 @@ For HUD work specifically:
 
 {SUBMISSION_DOCUMENT}
 
-When `run_gecko` returns **PASS**, save your findings, then submit \
-the exact `gecko_text` you passed in as your final answer and stop.
+When `run_gecko` returns **PASS**, save the working gecko code via \
+`save_gecko_code(gecko_text, description)`, save your findings, then \
+submit the exact `gecko_text` you passed in as your final answer and stop.
 
 If you exhaust your budget without a PASS, still save your findings, \
 then submit the **exact gecko_text from your highest-`hud_mean` \

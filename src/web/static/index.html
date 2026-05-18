@@ -504,6 +504,7 @@
 
     <div style="padding:0.75rem 1.5rem 0.75rem 2rem; flex-shrink:0;">
       <button class="kb-tab active" onclick="switchKbTab('research')" id="kb-tab-research">Research</button>
+      <button class="kb-tab" onclick="switchKbTab('gecko-codes')" id="kb-tab-gecko-codes">Gecko Codes</button>
       <button class="kb-tab" onclick="switchKbTab('annotations')" id="kb-tab-annotations">Annotations</button>
     </div>
 
@@ -520,6 +521,25 @@
               <span id="kb-doc-name" class="kb-doc-name"></span>
             </div>
             <div id="kb-doc-content" style="flex:1; padding:1.2rem 2rem; font-size:0.82rem; color:var(--text); overflow-y:auto; white-space:pre-wrap; word-wrap:break-word; overflow-wrap:break-word; line-height:1.7; margin:0; background:var(--bg); font-family:inherit;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="kb-panel-gecko-codes" class="kb-panel" hidden>
+      <div style="display:flex; flex-direction:row; height:100%; overflow:hidden; margin:0 1rem;">
+        <div style="width:220px; min-width:220px; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; flex-shrink:0; padding-top:0.5rem;">
+          <div style="padding:0.5rem 1rem; font-size:0.7rem; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; border-bottom:1px solid var(--border); background:var(--bg);">Saved Codes</div>
+          <div id="gcc-file-list"></div>
+        </div>
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+          <div id="gcc-empty" class="kb-content-empty">Select a Gecko code to view</div>
+          <div id="gcc-view" style="display:none; flex-direction:column; height:100%; overflow:hidden;">
+            <div style="padding:0.6rem 1.5rem; border-bottom:1px solid var(--border); background:var(--surface);">
+              <span id="gcc-name" class="kb-doc-name"></span>
+            </div>
+            <div id="gcc-description" style="padding:0.8rem 1.5rem; font-size:0.82rem; color:var(--text); border-bottom:1px solid var(--border); background:var(--surface); line-height:1.6; white-space:pre-wrap;"></div>
+            <div id="gcc-content" style="flex:1; padding:1.2rem 2rem; font-size:0.82rem; color:var(--text); overflow-y:auto; white-space:pre; word-wrap:break-word; line-height:1.7; background:var(--bg); font-family:'Fira Code',monospace;"></div>
           </div>
         </div>
       </div>
@@ -931,6 +951,7 @@
       }).join('');
       switchKbTab('research');
       loadKbResearch();
+      loadKbGeckoCodes();
       loadKbAnnotations();
     }
 
@@ -1007,6 +1028,61 @@
         document.getElementById('kb-doc-view').style.display = 'flex';
         document.getElementById('kb-doc-empty').style.display = 'none';
       }
+    }
+
+    // ── Gecko Codes KB ──────────────────────────────────────────────── //
+
+    async function loadKbGeckoCodes() {
+      try {
+        const res = await api('GET', `/api/projects/${currentProjectId}/gecko-codes`);
+        const listEl = document.getElementById('gcc-file-list');
+
+        if (!res.codes || res.codes.length === 0) {
+          listEl.innerHTML = '<div style="padding:1rem; color:var(--text-dim); font-size:0.8rem;">No saved Gecko codes yet.</div>';
+          return;
+        }
+
+        listEl.innerHTML = res.codes.map(c => `
+          <div class="kb-file-entry" onclick="openGeckoCode('${c.filename}')" style="cursor:pointer; padding:0.5rem 1rem; border-bottom:1px solid var(--border);">
+            <div style="font-size:0.82rem; font-weight:600; color:var(--text);">$${c.name}</div>
+            <div style="font-size:0.72rem; color:var(--text-dim); margin-top:2px;">${c.lines} lines${c.description ? ' — ' + c.description.substring(0, 60) + (c.description.length > 60 ? '...' : '') : ''}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:3px;">
+              <span style="font-size:0.68rem; color:var(--text-dim);">${c.task_id ? 'task ' + c.task_id.substring(0, 8) : ''}</span>
+              <button class="danger" style="font-size:0.65rem; padding:1px 6px;" onclick="event.stopPropagation(); deleteGeckoCode('${c.filename}')">delete</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (e) {
+        console.error('loadKbGeckoCodes', e);
+      }
+    }
+
+    async function openGeckoCode(filename) {
+      try {
+        const res = await api('GET', `/api/projects/${currentProjectId}/gecko-codes/${filename}`);
+        document.getElementById('gcc-empty').style.display = 'none';
+        const view = document.getElementById('gcc-view');
+        view.style.display = 'flex';
+        document.getElementById('gcc-name').textContent = filename;
+        const descEl = document.getElementById('gcc-description');
+        if (res.description) {
+          descEl.textContent = res.description;
+          descEl.style.display = 'block';
+        } else {
+          descEl.style.display = 'none';
+        }
+        document.getElementById('gcc-content').textContent = res.content;
+      } catch (e) {
+        console.error('openGeckoCode', e);
+      }
+    }
+
+    async function deleteGeckoCode(filename) {
+      if (!confirm(`Delete Gecko code ${filename}?`)) return;
+      await api('DELETE', `/api/projects/${currentProjectId}/gecko-codes/${filename}`);
+      loadKbGeckoCodes();
+      document.getElementById('gcc-empty').style.display = 'flex';
+      document.getElementById('gcc-view').style.display = 'none';
     }
 
     async function loadKbAnnotations() {

@@ -85,14 +85,21 @@ def build_tools(
             assert session is not None, "interactive gecko requires a session"
             assert savestate_path is not None, "interactive gecko requires savestate_path"
             assert task_root is not None, "interactive gecko requires task_root"
-            from src.agent.runtime_tools import (
-                apply_gecko_code,
-                save_gecko_code,
-            )
+            from src.agent.runtime_tools import apply_gecko_code
 
             _gdb_port = 6777 if Capability.RAM_POKE in spec.capabilities else None
             tools.append(apply_gecko_code(session, iso_path, savestate_path, gdb_port=_gdb_port))
-            tools.append(save_gecko_code(task_root))
+
+        # Gecko code knowledge base — save, list, read (always with gecko injection)
+        from src.agent.runtime_tools import list_gecko_codes, read_gecko_code, save_gecko_code
+
+        _task_root = task_root if task_root is not None else project_root
+        assert _task_root is not None, "gecko injection requires task_root or project_root"
+        tools += [
+            save_gecko_code(_task_root, project_root=project_root),
+            list_gecko_codes(project_root),
+            read_gecko_code(project_root),
+        ]
 
     # Frame capture
     if Capability.FRAME_CAPTURE in spec.capabilities and session is not None:
