@@ -13,9 +13,9 @@ from src.logging import logger
 from src.web.sessions import ISO_CACHE_ROOT, Project, Savestate, Task, TaskState
 
 # Limits.
-MAX_ISO_SIZE = 5_000_000_000  # 5 GB (GC full-disc ISOs can be ~4.4 GB with padding)
-MAX_SAVESTATE_SIZE = 50_000_000  # 50 MB
-MAX_SCREENSHOT_SIZE = 20_000_000  # 20 MB
+MAX_ISO_SIZE = 10_000_000_000  # 10 GB (GC ~4.4 GB; Wii dual-layer ~8.5 GB)
+MAX_SAVESTATE_SIZE = 1_000_000_000  # 1 GB (Dolphin savestates typically <100 MB)
+MAX_SCREENSHOT_SIZE = 100_000_000  # 100 MB (no upload route currently; safety net)
 
 FRAME_SIZE = (640, 480)
 
