@@ -67,3 +67,4 @@ cache/
 
 # Web UI session data (uploads, masks, results — ephemeral per-run)
 sessions/
+demo-site/
