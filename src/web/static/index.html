@@ -305,6 +305,13 @@
       <h2>Create Task</h2>
       <p class="ntc-subtitle">Configure what the agent should do, which tools it gets, and how it's evaluated.</p>
 
+      <!-- Task Name -->
+      <div class="ntc-section">
+        <span class="ntc-label">Task name</span>
+        <input type="text" id="nt-name" placeholder="e.g. Remove minimap, Find player XYZ, Noclip v2..." style="width:100%;">
+        <p class="ntc-hint">Short name shown in the task list and Inspect AI viewer.</p>
+      </div>
+
       <!-- Presets -->
       <div class="ntc-section">
         <span class="ntc-label">Quick start</span>
@@ -922,16 +929,15 @@
 
         empty.hidden = true;
         list.innerHTML = tasks.map(t => {
-          let verdict = '';
-          if (t.result_verdict === 'PASS') verdict = '<span class="verdict-pass">PASS</span>';
-          else if (t.result_verdict === 'FAIL') verdict = '<span class="verdict-fail">FAIL</span>';
-          const taskLabel = (t.preset || t.goal_type || 'task').replace(/_/g, ' ');
+          const taskName = t.name || (t.preset || t.goal_type || 'task').replace(/_/g, ' ');
+          const stateClass = t.state === 'crashed' ? 'state-crashed'
+            : t.state === 'failed' ? 'state-failed'
+            : t.state === 'done' ? 'state-done' : '';
           return `<li onclick="location.hash='#/project/${currentProjectId}/task/${t.task_id}'">
             <span class="cursor">&gt;</span>
-            <span class="task-type">${taskLabel}</span>
-            <span class="task-state">${t.state}</span>
+            <span class="task-name">${taskName}</span>
+            <span class="task-state ${stateClass}">${t.state}</span>
             <span class="task-time">${timeAgo(t.created_at)}</span>
-            ${verdict}
             <button class="danger delete-btn" onclick="event.stopPropagation(); deleteTask('${t.task_id}')">x</button>
           </li>`;
         }).join('');
@@ -1534,11 +1540,12 @@
 
     async function submitNewTask() {
       const spec = collectJobSpec();
+      const taskName = document.getElementById('nt-name').value.trim();
       const errEl = document.getElementById('nt-errors');
       errEl.hidden = true;
 
       try {
-        const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { job_spec: spec });
+        const result = await api('POST', `/api/projects/${currentProjectId}/tasks`, { job_spec: spec, name: taskName });
         location.hash = `#/project/${currentProjectId}/task/${result.task_id}`;
       } catch (e) {
         errEl.textContent = e.message;
@@ -2278,7 +2285,7 @@
         taskBc.innerHTML = [
           { text: 'Projects', href: '#/' },
           { text: displayName, href: `#/project/${currentProjectId}` },
-          { text: 'task ' + currentTaskId.slice(0, 8) },
+          { text: 'task ' + currentTaskId.slice(0, 8) },  // updated below with name
         ].map((part, i, arr) => {
           if (i < arr.length - 1) return `<a href="${part.href}">${part.text}</a><span class="sep">/</span>`;
           return `<span>${part.text}</span>`;
@@ -2299,6 +2306,12 @@
         const t = await api('GET', `/api/projects/${currentProjectId}/tasks/${currentTaskId}`);
         surveyComplete = t.survey_complete || false;
         const state = t.state;
+
+        // Update breadcrumb with task name if available.
+        if (t.name) {
+          const bcSpans = taskBc.querySelectorAll('span:not(.sep)');
+          if (bcSpans.length) bcSpans[bcSpans.length - 1].textContent = t.name;
+        }
 
         // Determine task shape from job_spec
         const spec = t.job_spec || {};

@@ -223,6 +223,7 @@ def build_task_from_project_task(
     # Build submit description based on goal type
     submit_desc = _submit_description(spec)
 
+    task_name = task.config.name or f"task_{task.task_id}"
     return InspectTask(
         dataset=[sample],
         solver=basic_agent(
@@ -232,6 +233,7 @@ def build_task_from_project_task(
             **({"submit_description": submit_desc} if submit_desc else {}),
         ),
         scorer=scorer,
+        name=task_name,
     )
 
 

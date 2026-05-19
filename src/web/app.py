@@ -248,17 +248,18 @@ async def create_task(project_id: str, body: dict | None = None) -> dict[str, st
         raise HTTPException(400, "Upload an ISO first")
 
     body = body or {}
+    task_name = body.get("name", "").strip() or "Unnamed Task"
 
     # Three ways to create a task: preset name, full job_spec, or legacy type
     if "preset" in body:
-        task = project.create_task(preset=body["preset"])
+        task = project.create_task(preset=body["preset"], name=task_name)
     elif "job_spec" in body:
-        task = project.create_task(job_spec_dict=body["job_spec"])
+        task = project.create_task(job_spec_dict=body["job_spec"], name=task_name)
     elif "type" in body:
         # Legacy support
-        task = project.create_task(task_type=body["type"])
+        task = project.create_task(task_type=body["type"], name=task_name)
     else:
-        task = project.create_task(preset="hud_removal")
+        task = project.create_task(preset="hud_removal", name=task_name)
 
     spec = task.config.get_job_spec()
     return {
@@ -276,11 +277,13 @@ async def list_tasks(project_id: str) -> list[dict]:  # type: ignore[type-arg]
     result = []
     for t in project.list_tasks():
         spec = t.get_job_spec()
+        state = t.state
         result.append({
             "task_id": t.task_id,
+            "name": t.name,
             "preset": t.preset_name,
             "goal_type": spec.goal_type.value,
-            "state": t.state,
+            "state": state,
             "result_verdict": t.result_verdict,
             "created_at": t.created_at,
         })

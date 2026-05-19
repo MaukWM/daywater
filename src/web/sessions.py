@@ -88,6 +88,7 @@ class TaskConfig:
     """Persisted task metadata (one agent run within a project)."""
 
     task_id: str
+    name: str = ""
     state: TaskState = TaskState.CREATED
     created_at: float = field(default_factory=time.time)
 
@@ -322,6 +323,7 @@ class Project:
         self,
         task_type: str = "",
         *,
+        name: str = "",
         job_spec_dict: dict[str, Any] | None = None,
         preset: str = "",
     ) -> Task:
@@ -365,7 +367,7 @@ class Project:
             spec_dict = spec.to_dict()
             spec_dict["_preset"] = "hud_removal"
 
-        config = TaskConfig(task_id=tid, job_spec=spec_dict)
+        config = TaskConfig(task_id=tid, name=name, job_spec=spec_dict)
         task = Task(task_dir, config)
         task.save()
         label = preset or task_type or spec_dict.get("_preset", "custom")

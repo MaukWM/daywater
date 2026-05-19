@@ -329,9 +329,10 @@ main {
   opacity: 1;
 }
 
-.task-list .task-type {
-  color: var(--amber);
-  min-width: 120px;
+.task-list .task-name {
+  color: var(--text);
+  min-width: 140px;
+  flex: 2;
 }
 
 .task-list .task-state {
@@ -339,14 +340,16 @@ main {
   flex: 1;
 }
 
-.task-list .verdict-pass {
-  color: var(--green);
-  font-weight: 600;
+.task-list .task-state.state-crashed {
+  color: var(--red);
 }
 
-.task-list .verdict-fail {
+.task-list .task-state.state-failed {
   color: var(--red);
-  font-weight: 600;
+}
+
+.task-list .task-state.state-done {
+  color: var(--green);
 }
 
 /* ── Steps (task wizard) ─────────────────────────────────────────────── */
