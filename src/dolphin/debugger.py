@@ -25,10 +25,24 @@ from __future__ import annotations
 
 import re
 import socket
+import subprocess
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from src.logging import logger
+
+
+def _read_log_tail(log_path: Path | None, lines: int = 50) -> str:
+    """Read the last *lines* lines from a log file, or return a placeholder."""
+    if log_path is None or not log_path.exists():
+        return "(no dolphin.log available)"
+    try:
+        text = log_path.read_text(errors="replace")
+        tail = "\n".join(text.splitlines()[-lines:])
+        return tail or "(dolphin.log is empty)"
+    except OSError:
+        return "(could not read dolphin.log)"
 
 
 def _checksum(data: str) -> str:
@@ -45,6 +59,10 @@ class GDBError(Exception):
     """GDB protocol or connection error."""
 
 
+class DolphinDiedDuringBoot(GDBError):
+    """Dolphin process exited before the GDB stub became available."""
+
+
 @dataclass
 class GDBClient:
     """Minimal GDB RSP client for Dolphin's built-in debugger stub."""
@@ -53,12 +71,39 @@ class GDBClient:
     port: int = 2345
     _sock: socket.socket | None = field(default=None, repr=False, init=False)
 
-    def connect(self, timeout: float = 10.0) -> None:
-        """Connect to Dolphin's GDB stub. Retries until timeout."""
+    def connect(
+        self,
+        timeout: float = 10.0,
+        proc: subprocess.Popen[bytes] | None = None,
+        log_path: Path | None = None,
+    ) -> None:
+        """Connect to Dolphin's GDB stub. Retries until timeout.
+
+        Args:
+            timeout: Maximum seconds to wait for the GDB stub to accept a
+                connection.
+            proc: Optional Dolphin subprocess handle.  When provided the
+                connect loop polls ``proc.poll()`` and raises
+                :class:`DolphinDiedDuringBoot` immediately if the process
+                exits, instead of waiting for the full timeout.
+            log_path: Path to ``dolphin.log``.  When a connection failure
+                occurs the last 50 lines are included in the exception
+                message so the agent (or human) can diagnose the crash.
+        """
         deadline = time.monotonic() + timeout
         last_err: OSError | None = None
 
         while time.monotonic() < deadline:
+            # Fast-fail if Dolphin already exited.
+            if proc is not None and proc.poll() is not None:
+                tail = _read_log_tail(log_path)
+                raise DolphinDiedDuringBoot(
+                    f"Dolphin (pid {proc.pid}) exited with code "
+                    f"{proc.returncode} before GDB stub bound port "
+                    f"{self.port}\n--- last 50 lines of dolphin.log ---\n"
+                    f"{tail}"
+                )
+
             try:
                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 sock.settimeout(5.0)
@@ -73,9 +118,11 @@ class GDBClient:
                 sock.close()
                 time.sleep(0.5)
 
+        tail = _read_log_tail(log_path)
         raise GDBError(
             f"Could not connect to GDB stub at {self.host}:{self.port} "
-            f"within {timeout}s: {last_err}"
+            f"within {timeout}s: {last_err}\n"
+            f"--- last 50 lines of dolphin.log ---\n{tail}"
         )
 
     def _drain_pending(self) -> None:

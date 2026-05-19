@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
-from src.dolphin.debugger import GDBClient, WriteHit, find_writers
+from src.dolphin.debugger import GDBClient, GDBError, WriteHit, find_writers
 from src.dolphin.gecko import GeckoCode, parse_gecko, render_gecko_ini
 from src.dolphin.input import (
     InputSequence,
@@ -67,6 +67,9 @@ from src.dolphin.watcher import (
 from src.logging import logger
 
 _IS_LINUX = sys.platform == "linux"
+
+# GDB connect timeout — override via DAYWATER_GDB_CONNECT_TIMEOUT env var.
+_GDB_CONNECT_TIMEOUT = float(os.environ.get("DAYWATER_GDB_CONNECT_TIMEOUT", "30.0"))
 
 
 def _find_dolphin_child_pid(parent_pid: int, timeout: float = 15.0) -> int:
@@ -355,6 +358,42 @@ class DolphinSession:
         logger.info("dolphin_session_terminated", pid=self.pid, rc=rc)
         return rc
 
+    def preserve_crash_artifacts(self, dest_dir: Path | None = None) -> Path | None:
+        """Copy crash-relevant files before cleanup.
+
+        Saves dolphin.log, the active gecko INI, and any savestates from
+        the session's user directory into *dest_dir* (or an auto-named
+        ``crashes/<timestamp>/`` directory under the session temp root).
+
+        Returns the directory where artifacts were saved, or None if
+        there was nothing to preserve.
+        """
+        if self._tmp_root is None and dest_dir is None:
+            return None
+
+        import datetime
+
+        if dest_dir is None:
+            crash_root = (self._tmp_root or self.user_dir).parent / "crashes"
+            ts = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            dest_dir = crash_root / ts
+
+        dest_dir.mkdir(parents=True, exist_ok=True)
+
+        # dolphin.log
+        log_path = (self._tmp_root or self.user_dir) / "dolphin.log"
+        if log_path.exists():
+            shutil.copy2(log_path, dest_dir / "dolphin.log")
+
+        # gecko INI(s)
+        gs_dir = self.user_dir / "GameSettings"
+        if gs_dir.is_dir():
+            for ini in gs_dir.glob("*.ini"):
+                shutil.copy2(ini, dest_dir / ini.name)
+
+        logger.info("crash_artifacts_preserved", dest=str(dest_dir))
+        return dest_dir
+
     def cleanup(self) -> None:
         """Remove the temporary directory if one was auto-created."""
         if self._tmp_root is not None:
@@ -504,7 +543,11 @@ class DolphinSession:
         gdb_client: GDBClient | None = None
         if gdb_port is not None:
             gdb_client = GDBClient(port=gdb_port)
-            gdb_client.connect(timeout=15.0)
+            gdb_client.connect(
+                timeout=_GDB_CONNECT_TIMEOUT,
+                proc=proc,
+                log_path=log_path,
+            )
             # Continue execution and consume the ACK
             gdb_client.continue_execution()
             # Drain any pending ACK so the socket is clean

@@ -22,6 +22,7 @@ from src.ghidra.analyze import cache_dir_for_sha1
 # `run_gecko` budget counter (int).
 BUDGET_KEY = "daywater_run_gecko_used"
 
+
 # Last gecko_text that earned a PASS verdict (str). The scorer falls back
 # to this if the agent forgets to submit a textual answer.
 LAST_PASS_KEY = "daywater_last_pass_gecko"

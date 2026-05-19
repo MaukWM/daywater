@@ -18,6 +18,7 @@ from typing import Any
 
 from inspect_ai.tool import Tool, tool
 
+from src.dolphin.debugger import DolphinDiedDuringBoot, GDBError, _read_log_tail
 from src.dolphin.input import InputCommand, InputSequence
 from src.dolphin.memory import scan_floats_in_range
 from src.dolphin.session import DolphinSession
@@ -682,51 +683,48 @@ def apply_gecko_code(
         code_summary = ", ".join(f"${c.name} ({len(c.lines)} lines)" for c in codes)
         logger.info("apply_gecko_code", codes=code_summary)
 
-        # Terminate old session + its context manager
-        old_session = session_ref.session
-        old_cm = getattr(old_session, "_gecko_cm", None)
-        try:
-            old_session.terminate()
-            old_session.cleanup()
-        except Exception:
-            pass
-        if old_cm is not None:
-            try:
-                old_cm.__exit__(None, None, None)
-            except Exception:
-                pass
+        # Terminate old session
+        _teardown_session(session_ref)
 
         # Boot new session with gecko codes
-        session_cm = DolphinSession.start(
-            iso=iso_path,
-            savestate=savestate_path,
-            gecko_codes=codes,
-            pipe_input=True,
-            gdb_port=gdb_port,
-        )
-        new_session = session_cm.__enter__()
+        try:
+            session_cm = DolphinSession.start(
+                iso=iso_path,
+                savestate=savestate_path,
+                gecko_codes=codes,
+                pipe_input=True,
+                gdb_port=gdb_port,
+            )
+            new_session = session_cm.__enter__()
+        except (DolphinDiedDuringBoot, GDBError) as e:
+            logger.warning("gecko_crash_on_boot", error=str(e)[:300])
+            return _rollback_after_crash(
+                session_ref, iso_path, savestate_path, gdb_port,
+                code_summary=code_summary,
+                dolphin_log_tail=str(e),
+                crash_stage="gdb_connect",
+            )
 
-        # Store the context manager on the session so the next call can clean it up
         object.__setattr__(new_session, "_gecko_cm", session_cm)
 
         if not new_session.wait_for_first_frame():
-            # Check if process crashed
             rc = new_session.proc.poll()
-            if rc is not None:
-                return (
-                    f"Error: Dolphin crashed (exit code {rc}) after applying Gecko codes — "
-                    f"no frames were rendered. The code likely corrupted execution at the "
-                    f"patched address. Verify the hook site and instruction encoding."
-                )
-            return (
-                "Error: Dolphin produced no frames within 30s after reboot. "
-                "The game may be stuck in an infinite loop or the Gecko code "
-                "broke the render path. Try a different approach."
+            log_path = (new_session._tmp_root or new_session.user_dir) / "dolphin.log"
+            log_tail = _read_log_tail(log_path)
+            new_session.preserve_crash_artifacts()
+            _teardown_session_raw(new_session, session_cm)
+
+            crash_stage = "dolphin_boot_crash" if rc is not None else "no_frames_timeout"
+            logger.warning("gecko_crash_no_frames", exit_code=rc)
+            return _rollback_after_crash(
+                session_ref, iso_path, savestate_path, gdb_port,
+                code_summary=code_summary,
+                dolphin_log_tail=log_tail,
+                crash_stage=crash_stage,
+                exit_code=rc,
             )
 
         session_ref.swap(new_session)
-
-        # Wait for game to settle
         time.sleep(2.0)
 
         frame = _capture_frame_content(session_ref)
@@ -734,7 +732,8 @@ def apply_gecko_code(
 
         parts: list[Any] = [
             ContentText(
-                text=(f"Gecko codes applied: {code_summary}. Dolphin rebooted from savestate. Game is running.")
+                text=f"Gecko codes applied: {code_summary}. "
+                f"Dolphin rebooted from savestate. Game is running."
             ),
         ]
         if frame is not None:
@@ -742,6 +741,74 @@ def apply_gecko_code(
         return parts
 
     return execute
+
+
+def _teardown_session(session_ref: SessionRef) -> None:
+    """Terminate the current session and its context manager."""
+    session = session_ref.session
+    cm = getattr(session, "_gecko_cm", None)
+    _teardown_session_raw(session, cm)
+
+
+def _teardown_session_raw(
+    session: DolphinSession, cm: Any | None
+) -> None:
+    """Terminate a session + optional context manager, swallowing errors."""
+    try:
+        session.terminate()
+        session.cleanup()
+    except Exception:
+        pass
+    if cm is not None:
+        try:
+            cm.__exit__(None, None, None)
+        except Exception:
+            pass
+
+
+def _rollback_after_crash(
+    session_ref: SessionRef,
+    iso_path: Path,
+    savestate_path: Path,
+    gdb_port: int | None,
+    *,
+    code_summary: str,
+    dolphin_log_tail: str,
+    crash_stage: str,
+    exit_code: int | None = None,
+) -> str:
+    """Roll back to a clean Dolphin session (no gecko codes) after a crash."""
+    rollback_status = "failed"
+    try:
+        clean_cm = DolphinSession.start(
+            iso=iso_path,
+            savestate=savestate_path,
+            pipe_input=True,
+            gdb_port=gdb_port,
+        )
+        clean_session = clean_cm.__enter__()
+        object.__setattr__(clean_session, "_gecko_cm", clean_cm)
+        if clean_session.wait_for_first_frame():
+            session_ref.swap(clean_session)
+            rollback_status = "ok — clean session restored (no gecko codes)"
+        else:
+            rollback_status = "partial — Dolphin booted but no frames rendered"
+    except Exception as e:
+        rollback_status = f"failed — could not restart Dolphin: {e}"
+        logger.error("rollback_restart_failed", error=str(e)[:200])
+
+    exit_line = f"  exit_code: {exit_code}\n" if exit_code is not None else ""
+    log_block = "\n".join("    " + ln for ln in dolphin_log_tail.splitlines())
+    return (
+        f"GECKO_CRASH:\n"
+        f"  codes: {code_summary}\n"
+        f"  crashed_at_step: {crash_stage}\n"
+        f"{exit_line}"
+        f"  rollback: {rollback_status}\n"
+        f"  dolphin_log_tail: |\n{log_block}\n\n"
+        f"Your Gecko code crashed Dolphin. It has been removed and a clean "
+        f"session restored. Review the log tail above, then revise your code."
+    )
 
 
 @tool

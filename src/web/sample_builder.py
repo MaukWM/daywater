@@ -158,6 +158,21 @@ def build_task_from_project_task(
     if spec.needs_savestate and not task.config.savestate_id:
         raise ValueError("Job spec requires runtime capabilities but no savestate is assigned")
 
+    # Reference frame + mask enforcement for pixel-diff tasks
+    if spec.evaluation == EvaluationMethod.PIXEL_DIFF_MASK:
+        if not task.reference_path.exists():
+            raise ValueError(
+                f"pixel_diff_mask task requires a reference frame but "
+                f"{task.reference_path} does not exist. "
+                f"Re-capture the reference frame in the task wizard."
+            )
+        if not task.mask_path.exists():
+            raise ValueError(
+                f"pixel_diff_mask task requires a HUD mask but "
+                f"{task.mask_path} does not exist. "
+                f"Paint the mask in the task wizard."
+            )
+
     # Build prompt
     controller_mapping = ""
     if Capability.INPUT_INJECTION in spec.capabilities:
@@ -452,6 +467,10 @@ def _find_clean_frame(frames: dict[int, Path]) -> Any | None:
 def build_run_gecko_for_task(task: Task, project: Project, spec: JobSpec) -> Tool:
     """Build the run_gecko tool for pixel-diff visual tasks."""
 
+    # Pre-cache reference + mask at build time so we fail fast and only once.
+    _reference_path = task.reference_path
+    _mask_path = task.mask_path
+
     @tool
     def run_gecko() -> Tool:
         async def execute(gecko_text: str) -> ToolResult:
@@ -461,6 +480,18 @@ def build_run_gecko_for_task(task: Task, project: Project, spec: JobSpec) -> Too
                 gecko_text: One or more `$Name` blocks followed by 16-char hex
                     pair lines.
             """
+            # Validate required assets exist before burning a budget slot.
+            if not _reference_path.exists():
+                return (
+                    f"Error: reference frame not found at {_reference_path}. "
+                    f"Go back to the task wizard and re-capture the reference frame."
+                )
+            if not _mask_path.exists():
+                return (
+                    f"Error: mask not found at {_mask_path}. "
+                    f"Go back to the task wizard and paint the HUD mask."
+                )
+
             used = int(inspect_store().get(BUDGET_KEY, 0))
             if used >= spec.max_gecko_runs:
                 return f"Budget exhausted ({used}/{spec.max_gecko_runs}). Submit your best answer."
@@ -488,9 +519,9 @@ def build_run_gecko_for_task(task: Task, project: Project, spec: JobSpec) -> Too
                 )
 
             mask_score = score_against_mask(
-                reference=load_image_rgb(task.reference_path),
+                reference=load_image_rgb(_reference_path),
                 candidate=outcome.image,
-                mask=load_mask(task.mask_path),
+                mask=load_mask(_mask_path),
                 hud_min_mean=spec.hud_min_mean,
                 preserve_max_mean=spec.preserve_max_mean,
             )

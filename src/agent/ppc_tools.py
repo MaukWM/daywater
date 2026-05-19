@@ -191,7 +191,12 @@ def assemble_ppc() -> Tool:
 def make_c2_hook() -> Tool:
     """Build the make_c2_hook agent tool."""
 
-    async def execute(hook_addr: int, asm: str, name: str = "Hook") -> str:
+    async def execute(
+        hook_addr: int,
+        asm: str,
+        name: str = "Hook",
+        preserve_regs: bool = False,
+    ) -> str:
         """Create a complete Gecko C2 hook from PowerPC assembly.
 
         The C2 codetype replaces the instruction at hook_addr with a branch
@@ -207,6 +212,12 @@ def make_c2_hook() -> Tool:
                  Do NOT include prologue/epilogue or a return branch.
                  Example: "lis r4, 0x4120; stw r4, 8(r1); lfs f1, 8(r1)"
             name: Name for the Gecko code block (default "Hook").
+            preserve_regs: If True, wrap the hook body in an automatic
+                 stmw/lmw prologue/epilogue that saves and restores r3–r31
+                 plus LR. This prevents your hook from clobbering registers
+                 that are live at the hook site. Set to False (default) if
+                 your hook intentionally modifies a return value or register
+                 state. Default False for backwards compatibility.
 
         Returns:
             Complete Gecko code text with $Name header, C2 codetype lines,
@@ -237,6 +248,22 @@ def make_c2_hook() -> Tool:
         # Dolphin's C2 codehandler does NOT re-execute the original instruction;
         # it branches to hook_addr+4 after running the body.
         body_words = [original_hex] + list(words)
+
+        # Optional register save/restore wrapper. When preserve_regs=True,
+        # we wrap the agent's code in stmw/lmw + LR save so the hook
+        # cannot accidentally clobber live registers at the hook site.
+        if preserve_regs:
+            # Prologue: save LR + r3-r31 on the stack
+            #   mflr r0              -> 7C0802A6
+            #   stwu r1, -0x80(r1)  -> 9421FF80
+            #   stmw r3, 8(r1)      -> BC610008  (29 regs * 4 = 116 bytes, fits in 0x80)
+            prologue = ["7C0802A6", "9421FF80", "BC610008"]
+            # Epilogue: restore r3-r31 + LR
+            #   lmw r3, 8(r1)       -> B8610008
+            #   addi r1, r1, 0x80   -> 38210080
+            #   mtlr r0             -> 7C0803A6
+            epilogue = ["B8610008", "38210080", "7C0803A6"]
+            body_words = prologue + body_words + epilogue
 
         # Build C2 block
         # C2 header: C2XXXXXX 0000000N where XXXXXX = addr & 0x01FFFFFF

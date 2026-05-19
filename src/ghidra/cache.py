@@ -134,7 +134,7 @@ def resolve_function(cache_dir: Path, addr_or_name: str) -> FunctionEntry:
     # Try renamed names from the sidecar.
     notes = NotesStore.load(cache_dir)
     target = addr_or_name.strip()
-    matches = [a for a, n in notes.renames.items() if n == target]
+    matches = [a for a, n in notes.renames.items() if n.get("value") == target]
     if len(matches) == 1:
         for e in entries:
             if e.addr == matches[0]:
