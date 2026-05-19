@@ -297,6 +297,15 @@ main {
   flex: 1;
 }
 
+.ss-thumb {
+  width: 48px;
+  height: 36px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
 /* ── Task list ──────────────────────────────────────────────────────── */
 
 .task-list {
@@ -409,9 +418,29 @@ main {
 /* ── Inputs & Buttons ────────────────────────────────────────────────── */
 
 input[type="file"] {
+  display: none;
+}
+
+.file-btn {
+  display: inline-block;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--green);
+  color: var(--green);
+  background: transparent;
   font-family: inherit;
-  font-size: 0.85rem;
-  color: var(--text);
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.file-btn:hover {
+  background: rgba(0, 255, 135, 0.08);
+}
+
+.file-btn-name {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
 }
 
 input[type="text"],

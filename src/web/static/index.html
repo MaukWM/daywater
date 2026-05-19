@@ -153,7 +153,8 @@
         <label>New project &mdash; upload a GameCube ISO:</label>
         <div class="file-pick">
           <input type="file" id="iso-input" accept=".iso,.nkit.iso,.rvz" onchange="onISOPicked(this)" />
-          <span id="iso-filename" class="file-label"></span>
+          <button type="button" class="file-btn" onclick="document.getElementById('iso-input').click()">Choose file</button>
+          <span id="iso-filename" class="file-btn-name">No file selected</span>
         </div>
         <button id="iso-upload-btn" onclick="uploadISO()">Upload</button>
         <div id="iso-progress" class="progress-bar" hidden>
@@ -443,7 +444,8 @@
             <p class="hint" style="margin-bottom:0.4rem;">Savestates must be from <a href="https://dolphin-emu.org/download/release/2603a/" target="_blank">Dolphin 2603a</a> — other versions will not work.</p>
             <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
               <input type="file" id="savestate-file-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" />
-              <input type="text" id="savestate-name-input" placeholder="Name (optional)" style="width:160px;" />
+              <button type="button" class="file-btn" onclick="document.getElementById('savestate-file-input').click()">Choose file</button>
+              <span id="savestate-filename" class="file-btn-name">No file selected</span>
               <button onclick="uploadProjectSavestate()">Upload</button>
             </div>
           </div>
@@ -787,9 +789,19 @@
         const f = input.files[0];
         label.textContent = `${f.name} (${(f.size / 1e6).toFixed(0)} MB)`;
       } else {
-        label.textContent = '';
+        label.textContent = 'No file selected';
       }
     }
+
+    // Update savestate filename label when file is picked.
+    document.addEventListener('change', (e) => {
+      if (e.target.id === 'savestate-file-input') {
+        const label = document.getElementById('savestate-filename');
+        if (label) {
+          label.textContent = e.target.files.length ? e.target.files[0].name : 'No file selected';
+        }
+      }
+    });
 
     async function uploadISO() {
       const input = document.getElementById('iso-input');
@@ -1583,18 +1595,18 @@
         list.innerHTML = savestates.map(s => {
           const name = s.name || s.savestate_id;
           const notes = s.notes ? ` — ${s.notes.slice(0, 60)}` : '';
-          const screenshotTag = s.has_screenshot
-            ? '<span class="status-tag ready">screenshot</span>'
-            : '<span class="status-tag analyzing">no screenshot</span>';
           const findingsTag = s.findings_count
             ? `<span class="status-tag ready">${s.findings_count} findings</span>`
+            : '';
+          const thumb = s.has_screenshot
+            ? `<img class="ss-thumb" src="/api/projects/${currentProjectId}/savestates/${s.savestate_id}/screenshot" alt="">`
             : '';
           return `<li onclick="expandSavestate('${s.savestate_id}')" style="cursor:pointer;">
             <span class="cursor">&gt;</span>
             <span class="task-type">${name}</span>
             <span class="meta">${timeAgo(s.created_at)}${notes}</span>
-            ${screenshotTag}
             ${findingsTag}
+            ${thumb}
             <button class="danger delete-btn" onclick="event.stopPropagation(); deleteSavestate('${s.savestate_id}')">x</button>
           </li>`;
         }).join('');
@@ -1607,16 +1619,13 @@
       const input = document.getElementById('savestate-file-input');
       if (!input.files.length) return alert('Select a savestate file first');
 
-      const name = document.getElementById('savestate-name-input').value.trim();
       const form = new FormData();
       form.append('file', input.files[0]);
 
-      const url = `/api/projects/${currentProjectId}/savestates/upload` + (name ? `?name=${encodeURIComponent(name)}` : '');
-
       try {
-        await api('POST', url, form, true);
+        await api('POST', `/api/projects/${currentProjectId}/savestates/upload`, form, true);
         input.value = '';
-        document.getElementById('savestate-name-input').value = '';
+        document.getElementById('savestate-filename').textContent = 'No file selected';
         loadSavestates();
       } catch (e) {
         alert('Savestate upload failed: ' + e.message);
