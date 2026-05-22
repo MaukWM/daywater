@@ -68,10 +68,10 @@ def _pixel_diff_scorer(
                     explanation="No parseable Gecko code in final answer.",
                 )
 
-            from src.web.sample_builder import _run_dolphin_with_retry
+            from src.runner import run_dolphin_with_retry
 
             iso_path = project.iso_path.resolve()
-            outcome = _run_dolphin_with_retry(
+            outcome = run_dolphin_with_retry(
                 iso_path, savestate_path, codes, spec.run_seconds,
             )
             if outcome.image is None:

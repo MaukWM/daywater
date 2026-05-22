@@ -1530,6 +1530,13 @@
       document.querySelectorAll('#nt-capabilities input[type=checkbox]:checked').forEach(cb => {
         capabilities.push(cb.value);
       });
+      // Include hidden caps required by the current evaluation method
+      const eval_ = document.getElementById('nt-evaluation').value;
+      for (const cap of CAP_DEFS) {
+        if (cap.hidden && cap.requiredBy?.eval?.includes(eval_) && !capabilities.includes(cap.id)) {
+          capabilities.push(cap.id);
+        }
+      }
 
       const hints = [];
       document.querySelectorAll('#nt-hints-list > div').forEach(row => {

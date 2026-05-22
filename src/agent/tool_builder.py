@@ -77,7 +77,7 @@ def build_tools(
         if spec.uses_visual_gecko:
             # HUD-style: run_gecko with mask scoring feedback
             assert task is not None and project is not None, "visual gecko requires task + project"
-            from src.web.sample_builder import build_run_gecko_for_task
+            from src.agent.visual_gecko_tool import build_run_gecko_for_task
 
             tools.append(build_run_gecko_for_task(task, project, spec))
         else:
