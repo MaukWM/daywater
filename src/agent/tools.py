@@ -65,18 +65,9 @@ def run_gecko(sample_dir: Path) -> Tool:
                 INI. Comments and blank lines are allowed.
 
         Returns:
-            A short verdict line plus the resulting frame as an image. If
-            the budget is exhausted, returns a message saying so and does
-            not run Dolphin.
+            A short verdict line plus the resulting frame as an image.
         """
-        used = sample_store.gecko_budget_used()
-        if used >= cfg.verify_budget:
-            return (
-                f"Budget exhausted ({used}/{cfg.verify_budget}). "
-                f"Submit your best answer; the final scorer will rerun whatever you last tried."
-            )
         call_idx = sample_store.increment_gecko_budget()
-        remaining = cfg.verify_budget - call_idx
 
         try:
             iso, savestate = resolve_runtime_paths(cfg)
@@ -86,9 +77,8 @@ def run_gecko(sample_dir: Path) -> Tool:
         codes = parse_gecko(gecko_text)
         if not codes:
             return (
-                f"Call {call_idx}/{cfg.verify_budget}: empty gecko text. "
-                f"Need at least one `$Name` block plus one or more hex-pair lines. "
-                f"({remaining} calls remaining)"
+                f"Call {call_idx}: empty gecko text. "
+                f"Need at least one `$Name` block plus one or more hex-pair lines."
             )
 
         tmp_root = Path(tempfile.mkdtemp(prefix="daywater_tool_"))
@@ -108,9 +98,9 @@ def run_gecko(sample_dir: Path) -> Tool:
 
             if not frames:
                 return (
-                    f"Call {call_idx}/{cfg.verify_budget}: Dolphin produced "
+                    f"Call {call_idx}: Dolphin produced "
                     f"no PNG frames (rc={result.returncode}). Possible: the "
-                    f"code crashed the emulator. ({remaining} calls remaining)"
+                    f"code crashed the emulator."
                 )
 
             candidate_png = frames[max(frames)]
@@ -136,13 +126,12 @@ def run_gecko(sample_dir: Path) -> Tool:
                 sample_store.set_last_pass_gecko(gecko_text)
 
             verdict_text = (
-                f"Call {call_idx}/{cfg.verify_budget} — verdict: {score.verdict}\n"
+                f"Call {call_idx} — verdict: {score.verdict}\n"
                 f"  hud_mean      = {score.hud_mean:.2f}  "
                 f"(need ≥ {cfg.score_hud_min_mean}, larger = HUD covered)\n"
                 f"  preserve_mean = {score.preserve_mean:.2f}  "
                 f"(need ≤ {cfg.score_preserve_max_mean}, smaller = scene preserved)\n"
-                f"  {score.reason()}\n"
-                f"  ({remaining} calls remaining)"
+                f"  {score.reason()}"
             )
             return [
                 ContentText(text=verdict_text),

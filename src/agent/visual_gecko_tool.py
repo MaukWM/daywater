@@ -53,15 +53,11 @@ def build_run_gecko_for_task(task: "Task", project: "Project", spec: JobSpec) ->
                     f"Go back to the task wizard and paint the HUD mask."
                 )
 
-            used = sample_store.gecko_budget_used()
-            if used >= spec.max_gecko_runs:
-                return f"Budget exhausted ({used}/{spec.max_gecko_runs}). Submit your best answer."
             call_idx = sample_store.increment_gecko_budget()
-            remaining = spec.max_gecko_runs - call_idx
 
             codes = parse_gecko(gecko_text)
             if not codes:
-                return f"Call {call_idx}/{spec.max_gecko_runs}: empty gecko text. ({remaining} remaining)"
+                return f"Call {call_idx}: empty gecko text."
 
             iso_path = project.iso_path.resolve()
             ss = project.get_savestate(task.config.savestate_id)
@@ -73,10 +69,7 @@ def build_run_gecko_for_task(task: "Task", project: "Project", spec: JobSpec) ->
                 iso_path, savestate_path, codes, spec.run_seconds,
             )
             if outcome.image is None:
-                return (
-                    f"Call {call_idx}/{spec.max_gecko_runs}: {outcome.crash_detail} "
-                    f"({remaining} remaining)"
-                )
+                return f"Call {call_idx}: {outcome.crash_detail}"
 
             mask_score = score_against_mask(
                 reference=load_image_rgb(_reference_path),
@@ -97,13 +90,12 @@ def build_run_gecko_for_task(task: "Task", project: "Project", spec: JobSpec) ->
             data_url = f"data:image/png;base64,{b64}"
 
             verdict_text = (
-                f"Call {call_idx}/{spec.max_gecko_runs} -- verdict: {mask_score.verdict}\n"
+                f"Call {call_idx} -- verdict: {mask_score.verdict}\n"
                 f"  hud_mean      = {mask_score.hud_mean:.2f}  "
                 f"(need >= {spec.hud_min_mean})\n"
                 f"  preserve_mean = {mask_score.preserve_mean:.2f}  "
                 f"(need <= {spec.preserve_max_mean})\n"
-                f"  {mask_score.reason()}\n"
-                f"  ({remaining} calls remaining)"
+                f"  {mask_score.reason()}"
             )
             return [
                 ContentText(text=verdict_text),

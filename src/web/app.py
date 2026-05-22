@@ -597,7 +597,7 @@ async def update_job_spec(project_id: str, task_id: str, body: dict) -> dict[str
     # Merge provided fields into the existing job spec
     for key in (
         "target_description", "capabilities", "evaluation", "goal_type",
-        "input_mutation_hints", "max_gecko_runs", "max_tool_calls",
+        "input_mutation_hints", "max_tool_calls",
         "message_limit", "run_seconds", "hud_min_mean", "preserve_max_mean",
     ):
         if key in body:
@@ -624,8 +624,6 @@ async def update_config(project_id: str, task_id: str, body: dict) -> dict[str, 
     spec_dict = dict(task.config.job_spec) if task.config.job_spec else {}
     if "hint" in body:
         spec_dict["target_description"] = body["hint"]
-    if "verify_budget" in body:
-        spec_dict["max_gecko_runs"] = body["verify_budget"]
     if "run_seconds" in body:
         spec_dict["run_seconds"] = body["run_seconds"]
     if "hud_min_mean" in body:

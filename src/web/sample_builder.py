@@ -85,7 +85,6 @@ def build_sample(task: Task, project: Project, spec: JobSpec) -> Sample:
 
     if spec.uses_visual_gecko:
         body_parts.append(
-            f"Budget: {spec.max_gecko_runs} test runs.\n"
             f"Scoring thresholds: HUD region mean diff >= {spec.hud_min_mean}, "
             f"preserve region mean diff <= {spec.preserve_max_mean}."
         )

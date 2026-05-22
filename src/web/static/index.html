@@ -250,9 +250,6 @@
               <p class="hint">Describe what noclip controls might look like in this game. Helps the agent understand the target behavior.</p>
             </div>
             <div class="config-row">
-              <label>Budget: <input type="number" id="budget-input" value="8" min="1" max="20">
-                <span class="field-hint">Max Dolphin test runs</span>
-              </label>
               <label>Run seconds: <input type="number" id="run-seconds-input" value="10" min="5" max="60">
                 <span class="field-hint">Dolphin runtime per test</span>
               </label>
@@ -375,15 +372,11 @@
             <input type="number" id="nt-message-limit" value="200" min="50" max="1000">
           </div>
           <div class="budget-field">
-            <label>Gecko test runs</label>
-            <input type="number" id="nt-max-gecko" value="10" min="1" max="30">
-          </div>
-          <div class="budget-field">
             <label>Run seconds</label>
             <input type="number" id="nt-run-seconds" value="10" min="5" max="60">
           </div>
         </div>
-        <p class="ntc-hint">Message limit caps the total agent conversation. Gecko runs cap Dolphin test cycles. Run seconds is per Dolphin boot.</p>
+        <p class="ntc-hint">Message limit caps the total agent conversation. Run seconds is per Dolphin boot.</p>
       </div>
 
       <!-- Errors + Submit -->
@@ -1348,7 +1341,7 @@
 
       // Budget
       document.getElementById('nt-message-limit').value = spec.message_limit || 200;
-      document.getElementById('nt-max-gecko').value = spec.max_gecko_runs || 10;
+      // max_gecko_runs removed — message limit is sufficient
       document.getElementById('nt-run-seconds').value = spec.run_seconds || 10;
 
       // Hints
@@ -1552,7 +1545,6 @@
         target_description: document.getElementById('nt-target').value.trim(),
         input_mutation_hints: hints,
         message_limit: parseInt(document.getElementById('nt-message-limit').value),
-        max_gecko_runs: parseInt(document.getElementById('nt-max-gecko').value),
         run_seconds: parseInt(document.getElementById('nt-run-seconds').value),
       };
     }
@@ -2347,7 +2339,6 @@
           document.querySelector('#step-run .step-num').textContent = '01';
           document.querySelector('#step-results .step-num').textContent = '02';
           document.getElementById('hint-input').value = targetDesc || 'Explore the codebase and document your findings.';
-          document.getElementById('budget-input').parentElement.parentElement.hidden = true;
           document.getElementById('run-seconds-input').parentElement.parentElement.hidden = true;
 
           if (state === 'created' || state === 'ready') unlockStep('step-run');
@@ -2367,7 +2358,6 @@
           document.getElementById('step-mask').hidden = true;
           document.querySelector('#step-run .step-num').textContent = '02';
           document.querySelector('#step-results .step-num').textContent = '03';
-          document.getElementById('budget-input').parentElement.parentElement.hidden = true;
           document.getElementById('run-seconds-input').parentElement.parentElement.hidden = true;
           document.getElementById('hint-input').value = targetDesc || 'Describe the task objective.';
 
@@ -2585,10 +2575,8 @@
       // Save the current config before starting
       const config = {};
       config.hint = document.getElementById('hint-input').value;
-      const budgetEl = document.getElementById('budget-input');
       const runSecsEl = document.getElementById('run-seconds-input');
-      if (!budgetEl.parentElement.parentElement.hidden) {
-        config.verify_budget = parseInt(budgetEl.value);
+      if (runSecsEl && !runSecsEl.parentElement.parentElement.hidden) {
         config.run_seconds = parseInt(runSecsEl.value);
       }
       await api('POST', `${taskPath()}/config`, config);

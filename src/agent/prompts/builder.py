@@ -121,12 +121,11 @@ def _role_block(spec: JobSpec) -> str:
 def _tools_visual_gecko(spec: JobSpec) -> str:
     """Tool docs for the HUD-style run_gecko verification loop."""
     return (
-        "### Verification (budget-capped)\n\n"
+        "### Verification\n\n"
         "- `run_gecko(gecko_text)` — applies your candidate Gecko code, runs "
         "headless Dolphin against the pinned ISO + savestate, captures a frame, "
         "returns per-region pixel-diff stats vs the reference baseline + the "
-        f"captured frame itself as an image. **Budget-capped** ({spec.max_gecko_runs} calls). "
-        "Use only on candidates you have a real argument for."
+        "captured frame itself as an image."
     )
 
 
