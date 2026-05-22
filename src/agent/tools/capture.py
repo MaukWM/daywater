@@ -11,8 +11,8 @@ from typing import Any
 
 from inspect_ai.tool import Tool, tool
 
-from src.dolphin.session_ref import SessionRef
-from src.logging import logger
+from src.core.dolphin.session_ref import SessionRef
+from src.core.logging import logger
 
 
 def _capture_frame_content(session_ref: SessionRef) -> Any | None:

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from src.dolphin.gecko import GeckoCode, render_gecko_ini
+from src.core.dolphin.gecko import GeckoCode, render_gecko_ini
 
 # --- Platform detection -------------------------------------------------- #
 

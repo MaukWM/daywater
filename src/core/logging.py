@@ -1,7 +1,7 @@
 """Structured logging setup.
 
 Configures structlog once at import time based on `Settings.LOG_LEVEL` and
-`Settings.LOG_FORMAT`. Use `from src.logging import logger` everywhere.
+`Settings.LOG_FORMAT`. Use `from src.core.logging import logger` everywhere.
 """
 
 import logging
@@ -9,7 +9,7 @@ import sys
 
 import structlog
 
-from src.config import settings
+from src.core.config import settings
 
 
 def _configure() -> None:

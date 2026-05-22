@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
-from src.config import web_settings
+from src.core.config import web_settings
 
 router = APIRouter()
 

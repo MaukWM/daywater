@@ -35,14 +35,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
-from src.dolphin.debugger import GDBClient, GDBError, WriteHit, find_writers
-from src.dolphin.gecko import GeckoCode, parse_gecko, render_gecko_ini
-from src.dolphin.input import (
+from src.core.dolphin.debugger import GDBClient, GDBError, WriteHit, find_writers
+from src.core.dolphin.gecko import GeckoCode, parse_gecko, render_gecko_ini
+from src.core.dolphin.input import (
     InputSequence,
     play_inputs,
     setup_pipe_input,
 )
-from src.dolphin.memory import (
+from src.core.dolphin.memory import (
     DolphinMemoryError,
     clear_mem1_cache,
     read_gc_bytes,
@@ -50,7 +50,7 @@ from src.dolphin.memory import (
     read_gc_floats,
     read_gc_u32,
 )
-from src.dolphin.runner import (
+from src.core.dolphin.runner import (
     DEFAULT_DOLPHIN_INI,
     DEFAULT_GFX_INI,
     VideoBackend,
@@ -58,13 +58,13 @@ from src.dolphin.runner import (
     check_savestate_compatibility,
     collect_dump,
 )
-from src.dolphin.watcher import (
+from src.core.dolphin.watcher import (
     MemoryWatcherListener,
     PositionSample,
     create_watcher_socket,
     write_locations_file,
 )
-from src.logging import logger
+from src.core.logging import logger
 
 _IS_LINUX = sys.platform == "linux"
 
@@ -444,7 +444,7 @@ class DolphinSession:
             user_dir = tmp_root / "user"
 
         # Read game ID for INI file naming
-        from src.dolphin.runner import read_game_id
+        from src.core.dolphin.runner import read_game_id
 
         game_id = read_game_id(iso)
 

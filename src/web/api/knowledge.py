@@ -7,9 +7,9 @@ from dataclasses import asdict
 
 from fastapi import APIRouter, HTTPException
 
-from src.knowledge import FindingsStore, GeckoCodeStore, ResearchStore
-from src.ghidra.notes import NotesStore
-from src.paths import binaries_cache
+from src.core.ghidra.notes import NotesStore
+from src.core.knowledge import FindingsStore, GeckoCodeStore, ResearchStore
+from src.core.paths import binaries_cache
 from src.web.api.deps import _get_project
 
 router = APIRouter()

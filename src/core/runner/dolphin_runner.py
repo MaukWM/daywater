@@ -13,9 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from src.dolphin import collect_dump, load_png_frames, read_game_id, run_dolphin
-from src.dolphin.diff import has_render_glitch, load_image_rgb
-from src.dolphin.runner import RunResult, write_user_dir
+from src.core.dolphin import collect_dump, load_png_frames, read_game_id, run_dolphin
+from src.core.dolphin.diff import has_render_glitch, load_image_rgb
+from src.core.dolphin.runner import RunResult, write_user_dir
 
 # Max retries when a captured frame has a render glitch (black bar).
 MAX_GLITCH_RETRIES = 2
@@ -61,7 +61,7 @@ def run_dolphin_with_retry(
     Returns a ``DolphinRunOutcome`` with the candidate frame (or None) and
     crash diagnostics.
     """
-    from src.logging import logger
+    from src.core.logging import logger
 
     last_result: RunResult | None = None
     for attempt in range(1 + max_retries):

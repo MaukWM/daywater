@@ -12,7 +12,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from src.paths import sessions_root
+from src.core.paths import sessions_root
 
 
 class Settings:

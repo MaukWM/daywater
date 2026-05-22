@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.config import web_settings
+from src.core.config import web_settings
 
 router = APIRouter()
 

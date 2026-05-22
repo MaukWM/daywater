@@ -8,8 +8,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from src.dolphin.runner import read_game_id
-from src.logging import logger
+from src.core.dolphin.runner import read_game_id
+from src.core.logging import logger
 from src.web.sessions import ISO_CACHE_ROOT, Project, Savestate, Task, TaskState
 
 # Limits.

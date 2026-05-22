@@ -28,8 +28,6 @@ dependencies = [
 ]
 
 [project.scripts]
-daywater-probe = "src.cli.probe:main"
-daywater-diff = "src.cli.diff:main"
 daywater-web = "src.web.app:main"
 
 [build-system]

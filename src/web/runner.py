@@ -11,8 +11,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from src.logging import logger
-from src.paths import cache_root, logs_root, samples_root, sessions_root
+from src.core.logging import logger
+from src.core.paths import cache_root, logs_root, samples_root, sessions_root
 from src.web.sessions import Project, Task, TaskState
 
 _executor = ThreadPoolExecutor(max_workers=1)
@@ -90,8 +90,8 @@ async def run_survey(project: Project) -> None:
 
 async def run_capture_frame(savestate_path: Path, iso_path: Path) -> Path:
     """Run Dolphin briefly from savestate to capture a reference frame."""
-    from src.dolphin import collect_dump, load_png_frames, read_game_id, run_dolphin
-    from src.dolphin.runner import write_user_dir
+    from src.core.dolphin import collect_dump, load_png_frames, read_game_id, run_dolphin
+    from src.core.dolphin.runner import write_user_dir
 
     iso_path = iso_path.resolve()
 
@@ -103,7 +103,7 @@ async def run_capture_frame(savestate_path: Path, iso_path: Path) -> Path:
             import subprocess
             import time as _time
 
-            from src.dolphin.runner import _build_command, _terminate, check_savestate_compatibility
+            from src.core.dolphin.runner import _build_command, _terminate, check_savestate_compatibility
 
             tmp_root = Path(tempfile.mkdtemp(prefix="daywater_capture_"))
             user_dir = tmp_root / "user"
@@ -398,7 +398,7 @@ async def run_ghidra_init() -> None:
                 "msg": f"test analysis: {sample_dol.name}...",
             })
             try:
-                from src.ghidra import run_analysis
+                from src.core.ghidra import run_analysis
 
                 result = run_analysis(sample_dol)
                 _emit_ghidra_event({

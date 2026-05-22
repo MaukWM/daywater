@@ -26,7 +26,7 @@ import numpy as np
 from numpy.typing import NDArray
 from PIL import Image
 
-from src.dolphin.diff import ImageArray, load_image_rgb
+from src.core.dolphin.diff import ImageArray, load_image_rgb
 
 
 @dataclass(frozen=True)

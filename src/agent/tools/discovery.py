@@ -21,7 +21,7 @@ from src.agent.state import (
     known_binaries,
     set_current_binary,
 )
-from src.ghidra import (
+from src.core.ghidra import (
     cache_dir_for_sha1,
     extract_iso_file,
     is_executable_candidate,
@@ -29,7 +29,7 @@ from src.ghidra import (
     run_analysis,
     sha1_of,
 )
-from src.logging import logger
+from src.core.logging import logger
 
 
 @tool

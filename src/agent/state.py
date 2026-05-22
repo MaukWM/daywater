@@ -14,7 +14,7 @@ from pathlib import Path
 
 from inspect_ai.util import store
 
-from src.ghidra.analyze import cache_dir_for_sha1
+from src.core.ghidra.analyze import cache_dir_for_sha1
 
 
 class SampleStore:

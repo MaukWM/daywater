@@ -24,7 +24,7 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.logging import logger
+from src.core.logging import logger
 
 # Content-addressed cache root. One subdirectory per binary SHA-1; shared
 # across samples and across runs. Gitignored.

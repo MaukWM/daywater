@@ -13,10 +13,10 @@ from typing import Any
 from inspect_ai.tool import Tool, tool
 
 from src.agent.tools.capture import _capture_frame_content
-from src.dolphin.debugger import DolphinDiedDuringBoot, GDBError, _read_log_tail
-from src.dolphin.session import DolphinSession
-from src.dolphin.session_ref import SessionRef
-from src.logging import logger
+from src.core.dolphin.debugger import DolphinDiedDuringBoot, GDBError, _read_log_tail
+from src.core.dolphin.session import DolphinSession
+from src.core.dolphin.session_ref import SessionRef
+from src.core.logging import logger
 
 
 @tool
@@ -39,7 +39,7 @@ def apply_gecko_code(
             gecko_text: Gecko code text. Use $Name headers and hex-pair lines.
                 Example: "$Noclip\\n042967F0 00000001"
         """
-        from src.dolphin.gecko import parse_gecko
+        from src.core.dolphin.gecko import parse_gecko
 
         codes = parse_gecko(gecko_text)
         if not codes:

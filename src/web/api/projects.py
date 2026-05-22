@@ -10,7 +10,7 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
-from src.ghidra import list_iso_files
+from src.core.ghidra import list_iso_files
 from src.web.api.deps import _get_project, store
 from src.web.events import stream_events
 from src.web.uploads import save_iso
@@ -156,7 +156,7 @@ async def get_disc_contents(project_id: str) -> dict:  # type: ignore[type-arg]
     if not project.iso_path.exists():
         raise HTTPException(404, "No ISO uploaded for this project")
 
-    from src.ghidra.iso import read_header
+    from src.core.ghidra.iso import read_header
 
     files = list_iso_files(project.iso_path)
 

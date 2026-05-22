@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from src.dolphin.session import DolphinSession
+from src.core.dolphin.session import DolphinSession
 
 
 class SessionRef:

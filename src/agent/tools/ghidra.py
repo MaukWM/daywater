@@ -25,8 +25,8 @@ import re
 from inspect_ai.tool import Tool, tool
 
 from src.agent.state import NO_BINARY_SELECTED_MSG, current_cache_dir
-from src.ghidra import NotesStore
-from src.ghidra.cache import (
+from src.core.ghidra import NotesStore
+from src.core.ghidra.cache import (
     callees_of,
     callers_of,
     find_functions,

@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.ghidra import (
+from src.core.ghidra import (
     extract_dol,
     extract_iso_file,
     is_executable_candidate,
@@ -26,7 +26,7 @@ from src.ghidra import (
     patch_elf_machine_ppc,
     run_analysis,
 )
-from src.logging import logger
+from src.core.logging import logger
 
 
 @dataclass(frozen=True)

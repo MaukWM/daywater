@@ -10,9 +10,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from src.logging import logger
-
-from src.paths import iso_cache_root, sessions_root
+from src.core.logging import logger
+from src.core.paths import iso_cache_root, sessions_root
 
 PROJECTS_ROOT = sessions_root()
 ISO_CACHE_ROOT = iso_cache_root()

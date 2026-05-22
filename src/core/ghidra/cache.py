@@ -112,7 +112,7 @@ def resolve_function(cache_dir: Path, addr_or_name: str) -> FunctionEntry:
     Returns the original `FunctionEntry`. Callers wanting the displayed
     name (with renames applied) should consult `NotesStore.display_name`.
     """
-    from src.ghidra.notes import NotesStore  # local to avoid cycle
+    from src.core.ghidra.notes import NotesStore  # local to avoid cycle
 
     entries = load_function_index(cache_dir)
     addr_hex: str | None
@@ -153,7 +153,7 @@ def find_functions(
     case_insensitive: bool = True,
 ) -> list[FunctionEntry]:
     """Regex over original names AND renames. Returns up to `limit` rows."""
-    from src.ghidra.notes import NotesStore
+    from src.core.ghidra.notes import NotesStore
 
     flags = re.IGNORECASE if case_insensitive else 0
     regex = re.compile(pattern, flags)

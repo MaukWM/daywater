@@ -10,8 +10,8 @@ from inspect_ai.tool import Tool
 from src.agent.job_spec import Capability, EvaluationMethod, JobSpec
 
 if TYPE_CHECKING:
-    from src.dolphin.session import DolphinSession
-    from src.dolphin.session_ref import SessionRef
+    from src.core.dolphin.session import DolphinSession
+    from src.core.dolphin.session_ref import SessionRef
 
 
 def build_tools(

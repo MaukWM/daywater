@@ -10,7 +10,7 @@ from pathlib import Path
 
 from inspect_ai.tool import Tool, tool
 
-from src.logging import logger
+from src.core.logging import logger
 
 
 @tool
@@ -34,7 +34,7 @@ def save_gecko_code(task_root: Path, project_root: Path | None = None) -> Tool:
         import json
         import time as _time
 
-        from src.dolphin.gecko import parse_gecko
+        from src.core.dolphin.gecko import parse_gecko
 
         codes = parse_gecko(gecko_text)
         if not codes:

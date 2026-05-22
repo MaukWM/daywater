@@ -19,22 +19,23 @@ from inspect_ai.tool import Tool, ToolResult, tool
 from src.agent.loader import load_sample_config, resolve_runtime_paths
 from src.agent.scorer import load_mask, score_against_mask
 from src.agent.state import sample_store
-from src.dolphin import (
+from src.core.dolphin import (
     collect_dump,
     load_png_frames,
     parse_gecko,
     read_game_id,
     run_dolphin,
 )
-from src.dolphin.diff import load_image_rgb
-from src.dolphin.runner import write_user_dir
-from src.logging import logger
+from src.core.dolphin.diff import load_image_rgb
+from src.core.dolphin.runner import write_user_dir
+from src.core.logging import logger
 
 
 def _png_to_data_url(p: Path) -> str:
     """Convert a PNG file to a data URL, re-encoding to ensure validity."""
-    from PIL import Image
     import io
+
+    from PIL import Image
 
     # Re-encode through Pillow to fix truncated/corrupt PNGs
     img = Image.open(p)

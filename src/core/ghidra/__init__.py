@@ -1,12 +1,12 @@
 """Ghidra-backed static analysis for daywater."""
 
-from src.ghidra.analyze import (
+from src.core.ghidra.analyze import (
     CACHE_ROOT,
     cache_dir_for_sha1,
     run_analysis,
     sha1_of,
 )
-from src.ghidra.cache import (
+from src.core.ghidra.cache import (
     callees_of,
     callers_of,
     find_functions,
@@ -16,8 +16,8 @@ from src.ghidra.cache import (
     resolve_function,
     search_strings,
 )
-from src.ghidra.dol import extract_dol
-from src.ghidra.iso import (
+from src.core.ghidra.dol import extract_dol
+from src.core.ghidra.iso import (
     IsoFile,
     IsoHeader,
     extract_iso_file,
@@ -26,7 +26,7 @@ from src.ghidra.iso import (
     patch_elf_machine_ppc,
     read_header,
 )
-from src.ghidra.notes import NotesStore
+from src.core.ghidra.notes import NotesStore
 
 __all__ = [
     "CACHE_ROOT",

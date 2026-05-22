@@ -26,7 +26,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from src.logging import logger
+from src.core.logging import logger
 
 # --- GCPadNew.ini template ------------------------------------------------ #
 

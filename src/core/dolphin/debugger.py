@@ -30,7 +30,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from src.logging import logger
+from src.core.logging import logger
 
 
 def _read_log_tail(log_path: Path | None, lines: int = 50) -> str:

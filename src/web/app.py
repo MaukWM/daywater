@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.config import web_settings
-from src.paths import logs_root
+from src.core.config import web_settings
+from src.core.paths import logs_root
 from src.web.api.knowledge import router as knowledge_router
 from src.web.api.processes import router as processes_router
 from src.web.api.projects import router as projects_router

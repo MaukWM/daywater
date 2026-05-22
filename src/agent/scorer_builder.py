@@ -42,8 +42,8 @@ def _pixel_diff_scorer(
     """Grade via pixel diff against mask — same logic as the old web_scorer."""
     from src.agent.scorer import load_mask, score_against_mask
     from src.agent.state import sample_store
-    from src.dolphin import parse_gecko
-    from src.dolphin.diff import load_image_rgb
+    from src.core.dolphin import parse_gecko
+    from src.core.dolphin.diff import load_image_rgb
 
     savestate_path = _resolve_savestate_path(task, project)
 
@@ -67,7 +67,7 @@ def _pixel_diff_scorer(
                     explanation="No parseable Gecko code in final answer.",
                 )
 
-            from src.runner import run_dolphin_with_retry
+            from src.core.runner import run_dolphin_with_retry
 
             iso_path = project.iso_path.resolve()
             outcome = run_dolphin_with_retry(

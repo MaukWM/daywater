@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 
 from inspect_ai.tool import Tool, tool
 
-from src.dolphin.input import InputCommand, InputSequence
+from src.core.dolphin.input import InputCommand, InputSequence
 
 if TYPE_CHECKING:
-    from src.dolphin.session import DolphinSession
+    from src.core.dolphin.session import DolphinSession
 
 # Valid GC buttons for the pipe protocol.
 GC_BUTTONS = frozenset(

@@ -17,9 +17,9 @@ from PIL import Image
 from src.agent.job_spec import JobSpec
 from src.agent.scorer import load_mask, score_against_mask
 from src.agent.state import sample_store
-from src.dolphin import parse_gecko
-from src.dolphin.diff import load_image_rgb
-from src.runner import run_dolphin_with_retry
+from src.core.dolphin import parse_gecko
+from src.core.dolphin.diff import load_image_rgb
+from src.core.runner import run_dolphin_with_retry
 
 if TYPE_CHECKING:
     from src.web.sessions import Project, Task

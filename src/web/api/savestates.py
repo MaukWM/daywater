@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from src.knowledge import FindingsStore
+from src.core.knowledge import FindingsStore
 from src.web.api.deps import _get_project, _get_savestate
 from src.web.uploads import save_savestate_to_project
 

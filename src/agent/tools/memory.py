@@ -9,10 +9,10 @@ from typing import TYPE_CHECKING
 
 from inspect_ai.tool import Tool, tool
 
-from src.dolphin.memory import scan_floats_in_range
+from src.core.dolphin.memory import scan_floats_in_range
 
 if TYPE_CHECKING:
-    from src.dolphin.session import DolphinSession
+    from src.core.dolphin.session import DolphinSession
 
 
 # ── Memory reading tools ──────────────────────────────────────────────── #

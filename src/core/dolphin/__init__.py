@@ -16,18 +16,18 @@ Public surface:
 - `DolphinSession`             — interactive session (input + memory + lifecycle)
 """
 
-from src.dolphin.debugger import GDBClient, WriteHit, find_writers
-from src.dolphin.diff import diff_stats, load_png_frames
-from src.dolphin.gecko import GeckoCode, parse_gecko, render_gecko_ini
-from src.dolphin.input import InputSequence, play_inputs, setup_pipe_input
-from src.dolphin.memory import (
+from src.core.dolphin.debugger import GDBClient, WriteHit, find_writers
+from src.core.dolphin.diff import diff_stats, load_png_frames
+from src.core.dolphin.gecko import GeckoCode, parse_gecko, render_gecko_ini
+from src.core.dolphin.input import InputSequence, play_inputs, setup_pipe_input
+from src.core.dolphin.memory import (
     DolphinMemoryError,
     read_gc_bytes,
     read_gc_float,
     read_gc_floats,
     read_gc_u32,
 )
-from src.dolphin.runner import (
+from src.core.dolphin.runner import (
     RunResult,
     check_savestate_compatibility,
     collect_dump,
@@ -36,8 +36,8 @@ from src.dolphin.runner import (
     read_savestate_dolphin_version,
     run_dolphin,
 )
-from src.dolphin.session import DolphinSession
-from src.dolphin.watcher import MemoryWatcherListener, PositionSample
+from src.core.dolphin.session import DolphinSession
+from src.core.dolphin.watcher import MemoryWatcherListener, PositionSample
 
 __all__ = [
     "DolphinMemoryError",

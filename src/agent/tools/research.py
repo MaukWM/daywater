@@ -12,7 +12,7 @@ from pathlib import Path
 
 from inspect_ai.tool import Tool, tool
 
-from src.knowledge.research import ResearchStore
+from src.core.knowledge.research import ResearchStore
 
 
 def build_index(project_root: Path) -> str:

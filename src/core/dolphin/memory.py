@@ -21,7 +21,7 @@ import struct
 import sys
 from pathlib import Path
 
-from src.logging import logger
+from src.core.logging import logger
 
 # GameCube MEM1 is exactly 24 MB
 MEM1_SIZE = 0x0180_0000  # 24 * 1024 * 1024

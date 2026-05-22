@@ -23,7 +23,7 @@ from inspect_ai.dataset import Sample
 from inspect_ai.model import ChatMessageUser, ContentImage, ContentText
 
 from src.agent.prompts import TASK_INPUT_PREFIX
-from src.knowledge import FindingsStore
+from src.core.knowledge import FindingsStore
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 

@@ -18,9 +18,8 @@ from src.agent.job_spec import Capability, EvaluationMethod, JobSpec
 from src.agent.prompts.builder import build_system_prompt
 from src.agent.scorer_builder import build_scorer
 from src.agent.tools.builder import build_tools
-from src.knowledge import FindingsStore
+from src.core.knowledge import FindingsStore
 from src.web.sessions import Project, Task
-
 
 # ── Unified Sample builder ────────────────────────────────────────────── #
 
@@ -230,8 +229,8 @@ def _setup_session(
     if not spec.needs_dolphin_session:
         return None, None, lambda: None
 
-    from src.dolphin.session import DolphinSession
-    from src.dolphin.session_ref import SessionRef
+    from src.core.dolphin.session import DolphinSession
+    from src.core.dolphin.session_ref import SessionRef
 
     ss = project.get_savestate(task.config.savestate_id)
     if ss is None:
