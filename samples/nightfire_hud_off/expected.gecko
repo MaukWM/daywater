@@ -1,6 +1,0 @@
-# Ground-truth solution for the nightfire_hud_off sample.
-# NTSC GO7E69 only.
-# Agent never sees this file — used for scorer sanity / regression tests.
-
-$DisableHUD
-04066570 4800006C
