@@ -125,7 +125,7 @@ def resolve_binary_for_analysis(cfg: SampleConfig, sample_dir: Path) -> Path:
         return dol
     raise FileNotFoundError(
         f"no analyzable binary: set {cfg.binary_env} to a real ELF, "
-        f"or run `scripts/build_analysis.py` to extract {dol} from the ISO first"
+        f"or extract and analyze the binary via the web UI first"
     )
 
 
@@ -153,7 +153,7 @@ def build_sample(
     if not reference_png.exists() or not mask_png.exists():
         raise FileNotFoundError(
             f"reference.png or mask.png missing in {sample_dir}; "
-            f"run scripts/gen_<sample>_assets.py first"
+            f"capture the reference frame and paint the mask in the web UI first"
         )
 
     inv_block = f"\n{inventory_text}\n" if inventory_text else ""

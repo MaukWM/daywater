@@ -54,7 +54,7 @@ class CallEdge:
 
 def _read_json_obj(p: Path) -> dict:
     if not p.exists():
-        raise FileNotFoundError(f"missing cache file {p}; run scripts/build_analysis.py")
+        raise FileNotFoundError(f"missing cache file {p}; analyze the binary via the web UI first")
     obj = json.loads(p.read_text())
     if not isinstance(obj, dict):
         raise ValueError(f"expected JSON object at top level of {p}, got {type(obj).__name__}")
