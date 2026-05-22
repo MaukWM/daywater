@@ -20,7 +20,7 @@ from src.agent.loader import (
 )
 from src.agent.presets import get_preset
 from src.agent.prompts.builder import build_system_prompt
-from src.agent.tool_builder import build_tools
+from src.agent.tools.builder import build_tools
 from src.dolphin import read_game_id
 
 SAMPLES_DIR = Path(__file__).resolve().parents[2] / "samples"

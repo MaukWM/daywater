@@ -105,7 +105,7 @@ async def delete_task(project_id: str, task_id: str) -> dict:  # type: ignore[ty
                 ss_fs.remove(f.id)
 
     # Clean up research docs created by this task
-    from src.agent.research_tools import remove_research_docs_for_task
+    from src.agent.tools.research import remove_research_docs_for_task
 
     removed_docs = remove_research_docs_for_task(project.root, task_id)
 

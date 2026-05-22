@@ -87,7 +87,7 @@ async def reset_knowledge(project_id: str) -> dict[str, bool]:
 @router.get("/api/projects/{project_id}/research")
 async def get_research_index(project_id: str) -> dict:  # type: ignore[type-arg]
     """Return the research index + list of available docs with summaries."""
-    from src.agent.research_tools import build_index, list_docs
+    from src.agent.tools.research import build_index, list_docs
 
     project = _get_project(project_id)
     index_text = build_index(project.root)
@@ -119,7 +119,7 @@ async def delete_research_doc(project_id: str, filename: str) -> dict[str, bool]
     path.unlink()
 
     # Clean up metadata
-    from src.agent.research_tools import _load_meta, _save_meta
+    from src.agent.tools.research import _load_meta, _save_meta
 
     meta = _load_meta(research_dir)
     meta.pop(filename, None)

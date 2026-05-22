@@ -17,7 +17,7 @@ from inspect_ai.solver import basic_agent, system_message
 from src.agent.job_spec import Capability, EvaluationMethod, JobSpec
 from src.agent.prompts.builder import build_system_prompt
 from src.agent.scorer_builder import build_scorer
-from src.agent.tool_builder import build_tools
+from src.agent.tools.builder import build_tools
 from src.findings import FindingsStore
 from src.web.sessions import Project, Task
 
@@ -230,8 +230,8 @@ def _setup_session(
     if not spec.needs_dolphin_session:
         return None, None, lambda: None
 
-    from src.agent.runtime_tools import SessionRef
     from src.dolphin.session import DolphinSession
+    from src.dolphin.session_ref import SessionRef
 
     ss = project.get_savestate(task.config.savestate_id)
     if ss is None:
