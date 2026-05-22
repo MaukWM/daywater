@@ -1307,6 +1307,17 @@
         console.error('Failed to load presets:', e);
       }
 
+      // Fetch schema (capabilities, goal types, eval methods) from server
+      try {
+        const schema = await api('GET', '/api/schema');
+        CAP_DEFS = schema.capabilities.map(c => ({
+          ...c,
+          requiredBy: c.required_by,  // snake_case → camelCase
+        }));
+      } catch (e) {
+        console.error('Failed to load schema:', e);
+      }
+
       // Render capability cards and clear form
       renderCapabilities();
       syncCapabilities();
@@ -1354,54 +1365,8 @@
       onGoalTypeChange();
     }
 
-    const CAP_DEFS = [
-      {
-        id: 'static_re',
-        name: 'Static RE',
-        desc: 'Ghidra-based binary analysis: decompile functions, search strings, trace call graphs, rename/annotate.',
-        tag: 'always on',
-      },
-      {
-        id: 'discovery',
-        name: 'ISO Discovery',
-        desc: 'Walk the disc filesystem, extract binaries, run Ghidra analysis. Lets the agent find and switch between executables.',
-        tag: 'always on',
-      },
-      {
-        id: 'gecko_injection',
-        name: 'Gecko Injection',
-        desc: 'Write and test Gecko cheat codes. The agent can apply codes to Dolphin and verify them against the game.',
-        requiredBy: { goal: ['find_code_patch'] },
-      },
-      {
-        id: 'ram_poke',
-        name: 'RAM Poke',
-        desc: 'Read/scan/diff live GameCube memory, set write watchpoints to find which code writes to an address. Requires a savestate.',
-        requiredBy: { goal: ['find_ram_address'] },
-        tag: 'runtime — needs savestate',
-      },
-      {
-        id: 'input_injection',
-        name: 'Input Injection',
-        desc: 'Send controller inputs to Dolphin: press buttons, hold sticks, sample position over time. Requires a savestate.',
-        tag: 'runtime — needs savestate',
-      },
-      {
-        id: 'frame_capture',
-        name: 'Frame Capture',
-        desc: 'Grab screenshots from the running Dolphin session for visual inspection.',
-        requiredBy: { eval: ['pixel_diff_mask'] },
-        tag: 'runtime — needs savestate',
-      },
-      {
-        id: 'pixel_diff',
-        name: 'Pixel Diff',
-        desc: 'Compare captured frames against a reference using a painted mask.',
-        requiredBy: { eval: ['pixel_diff_mask'] },
-        requires: ['frame_capture'],
-        hidden: true,  // Auto-included with pixel_diff_mask eval, not shown in UI
-      },
-    ];
+    // Populated from /api/schema on boot — no hardcoded duplicates.
+    let CAP_DEFS = [];
 
     function renderCapabilities() {
       const container = document.getElementById('nt-capabilities');

@@ -1,0 +1,234 @@
+"""Knowledge base routes: findings, research docs, gecko codes, unified knowledge."""
+
+from __future__ import annotations
+
+import json
+import shutil
+from pathlib import Path
+
+from fastapi import APIRouter, HTTPException
+
+from src.findings import FindingsStore
+from src.ghidra.notes import NotesStore
+from src.paths import binaries_cache
+from src.web.api.deps import _get_project
+
+router = APIRouter()
+
+
+# ── Helpers ──────────────────────────────────────────────────────────── #
+
+
+def _load_gecko_meta(gecko_dir: Path) -> dict:  # type: ignore[type-arg]
+    meta_path = gecko_dir / ".gecko_meta.json"
+    if meta_path.exists():
+        return json.loads(meta_path.read_text())
+    return {}
+
+
+def _save_gecko_meta(gecko_dir: Path, meta: dict) -> None:  # type: ignore[type-arg]
+    (gecko_dir / ".gecko_meta.json").write_text(json.dumps(meta, indent=2))
+
+
+# ── Findings ─────────────────────────────────────────────────────────── #
+
+
+@router.get("/api/projects/{project_id}/findings")
+async def get_findings(project_id: str) -> list[dict]:  # type: ignore[type-arg]
+    project = _get_project(project_id)
+    fs = FindingsStore.load(project.root)
+    from dataclasses import asdict
+
+    return [asdict(f) for f in fs.list_all()]
+
+
+@router.delete("/api/projects/{project_id}/findings/{finding_id}")
+async def delete_finding(project_id: str, finding_id: str) -> dict[str, bool]:
+    project = _get_project(project_id)
+    fs = FindingsStore.load(project.root)
+    if not fs.remove(finding_id):
+        raise HTTPException(404, f"Finding {finding_id} not found")
+    return {"ok": True}
+
+
+@router.delete("/api/projects/{project_id}/knowledge")
+async def reset_knowledge(project_id: str) -> dict[str, bool]:
+    """Clear all findings, research docs, and Ghidra renames/notes."""
+    project = _get_project(project_id)
+
+    # Clear findings
+    fs = FindingsStore.load(project.root)
+    fs.findings.clear()
+    fs._flush()
+
+    # Clear research docs
+    research_dir = project.root / "research"
+    if research_dir.exists():
+        shutil.rmtree(research_dir, ignore_errors=True)
+
+    # Clear Ghidra notes/renames from all cached binaries
+    cache_root = binaries_cache()
+    if cache_root.exists():
+        for sha_dir in cache_root.iterdir():
+            notes_path = sha_dir / "notes.json"
+            if notes_path.exists():
+                ns = NotesStore.load(sha_dir)
+                if ns.renames or ns.notes:
+                    ns.renames.clear()
+                    ns.notes.clear()
+                    ns._flush()
+
+    return {"ok": True}
+
+
+# ── Research docs ────────────────────────────────────────────────────── #
+
+
+@router.get("/api/projects/{project_id}/research")
+async def get_research_index(project_id: str) -> dict:  # type: ignore[type-arg]
+    """Return the research index + list of available docs with summaries."""
+    from src.agent.research_tools import build_index, list_docs
+
+    project = _get_project(project_id)
+    index_text = build_index(project.root)
+    docs = list_docs(project.root)
+    return {"index": index_text, "docs": docs}
+
+
+@router.get("/api/projects/{project_id}/research/{filename}")
+async def get_research_doc(project_id: str, filename: str) -> dict:  # type: ignore[type-arg]
+    """Return a single research document."""
+    project = _get_project(project_id)
+    research_dir = project.root / "research"
+    path = research_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(research_dir.resolve()):
+        raise HTTPException(404, f"Document {filename} not found")
+    return {"filename": filename, "content": path.read_text()}
+
+
+@router.delete("/api/projects/{project_id}/research/{filename}")
+async def delete_research_doc(project_id: str, filename: str) -> dict[str, bool]:
+    """Delete a single research document and its metadata."""
+    project = _get_project(project_id)
+    research_dir = project.root / "research"
+    path = research_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(research_dir.resolve()):
+        raise HTTPException(404, f"Document {filename} not found")
+    if filename == "INDEX.md":
+        raise HTTPException(400, "INDEX.md is auto-generated and cannot be deleted directly")
+    path.unlink()
+
+    # Clean up metadata
+    from src.agent.research_tools import _load_meta, _save_meta
+
+    meta = _load_meta(research_dir)
+    meta.pop(filename, None)
+    _save_meta(research_dir, meta)
+
+    return {"ok": True}
+
+
+# ── Gecko codes knowledge base ─────────────────────────────────────── #
+
+
+@router.get("/api/projects/{project_id}/gecko-codes")
+async def get_gecko_codes(project_id: str) -> dict:  # type: ignore[type-arg]
+    """List all saved Gecko codes with metadata."""
+    project = _get_project(project_id)
+    gecko_dir = project.root / "gecko_codes"
+
+    codes: list[dict[str, str]] = []
+    if gecko_dir.is_dir():
+        meta = _load_gecko_meta(gecko_dir)
+        for f in sorted(gecko_dir.glob("*.gecko")):
+            entry = meta.get(f.name, {})
+            text = f.read_text().strip()
+            # First line is $Name
+            name = text.splitlines()[0].lstrip("$") if text else f.stem
+            body_lines = [l for l in text.splitlines() if not l.startswith("$")]
+            codes.append({
+                "filename": f.name,
+                "name": name,
+                "lines": len(body_lines),
+                "description": entry.get("description", ""),
+                "task_id": entry.get("task_id", ""),
+                "created_at": entry.get("created_at", ""),
+            })
+    return {"codes": codes}
+
+
+@router.get("/api/projects/{project_id}/gecko-codes/{filename}")
+async def get_gecko_code(project_id: str, filename: str) -> dict:  # type: ignore[type-arg]
+    """Return a single Gecko code file."""
+    project = _get_project(project_id)
+    gecko_dir = project.root / "gecko_codes"
+    path = gecko_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(gecko_dir.resolve()):
+        raise HTTPException(404, f"Gecko code {filename} not found")
+    meta = _load_gecko_meta(gecko_dir)
+    entry = meta.get(filename, {})
+    return {
+        "filename": filename,
+        "content": path.read_text(),
+        "description": entry.get("description", ""),
+    }
+
+
+@router.delete("/api/projects/{project_id}/gecko-codes/{filename}")
+async def delete_gecko_code(project_id: str, filename: str) -> dict[str, bool]:
+    """Delete a saved Gecko code."""
+    project = _get_project(project_id)
+    gecko_dir = project.root / "gecko_codes"
+    path = gecko_dir / filename
+    if not path.exists() or not path.resolve().is_relative_to(gecko_dir.resolve()):
+        raise HTTPException(404, f"Gecko code {filename} not found")
+    path.unlink()
+    meta = _load_gecko_meta(gecko_dir)
+    meta.pop(filename, None)
+    _save_gecko_meta(gecko_dir, meta)
+    return {"ok": True}
+
+
+# ── Unified knowledge ────────────────────────────────────────────────── #
+
+
+@router.get("/api/projects/{project_id}/knowledge")
+async def get_knowledge(project_id: str) -> dict:  # type: ignore[type-arg]
+    """Combined knowledge base: findings + all Ghidra renames/notes across cached binaries."""
+    project = _get_project(project_id)
+
+    # Findings
+    fs = FindingsStore.load(project.root)
+    from dataclasses import asdict
+
+    findings = [asdict(f) for f in fs.list_all()]
+
+    # Ghidra notes/renames from all analyzed binaries
+    cache_root = binaries_cache()
+
+    renames: list[dict[str, str]] = []
+    notes: list[dict[str, str]] = []
+
+    if cache_root.exists():
+        for sha_dir in sorted(cache_root.iterdir()):
+            notes_path = sha_dir / "notes.json"
+            if not notes_path.exists():
+                continue
+            ns = NotesStore.load(sha_dir)
+            sha1 = sha_dir.name
+            for addr, entry in ns.renames.items():
+                renames.append({
+                    "address": addr,
+                    "name": entry.get("value", ""),
+                    "binary": sha1[:8],
+                    "task_id": entry.get("task_id", ""),
+                })
+            for addr, entry in ns.notes.items():
+                notes.append({
+                    "address": addr,
+                    "text": entry.get("value", ""),
+                    "binary": sha1[:8],
+                    "task_id": entry.get("task_id", ""),
+                })
+
+    return {"findings": findings, "renames": renames, "notes": notes}
