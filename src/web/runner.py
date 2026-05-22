@@ -12,13 +12,14 @@ from pathlib import Path
 from typing import Any
 
 from src.logging import logger
+from src.paths import cache_root, logs_root, samples_root, sessions_root
 from src.web.sessions import Project, Task, TaskState
 
 _executor = ThreadPoolExecutor(max_workers=1)
 
-_CACHE_ROOT = Path("/app/cache") if Path("/app/cache").exists() else Path("./cache")
-_LOGS_ROOT = Path("/app/logs") if Path("/app/logs").exists() else Path("./logs")
-_SESSIONS_ROOT = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
+_CACHE_ROOT = cache_root()
+_LOGS_ROOT = logs_root()
+_SESSIONS_ROOT = sessions_root()
 
 # Global lock: only one heavy operation (survey or agent run) at a time.
 _run_lock = asyncio.Lock()
@@ -381,7 +382,7 @@ async def run_ghidra_init() -> None:
             return
 
         # Try a test analysis if a sample binary is available
-        sample_dol = Path("/app/samples/nightfire_hud_off/boot.dol")
+        sample_dol = samples_root() / "nightfire_hud_off" / "boot.dol"
         # Also check extracted binaries from any existing project
         if not sample_dol.exists():
             extracted = _CACHE_ROOT / "extracted"

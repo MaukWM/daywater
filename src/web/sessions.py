@@ -12,8 +12,10 @@ from typing import Any
 
 from src.logging import logger
 
-PROJECTS_ROOT = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
-ISO_CACHE_ROOT = Path("/app/cache/isos") if Path("/app/cache").exists() else Path("./cache/isos")
+from src.paths import iso_cache_root, sessions_root
+
+PROJECTS_ROOT = sessions_root()
+ISO_CACHE_ROOT = iso_cache_root()
 
 
 # ── Task state machine ─────────────────────────────────────────────────── #

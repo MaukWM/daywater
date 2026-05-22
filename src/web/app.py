@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from src.findings import FindingsStore
 from src.ghidra import list_iso_files
 from src.ghidra.notes import NotesStore
+from src.paths import binaries_cache, logs_root, sessions_root
 from src.web.events import stream_events
 from src.web.mask import save_mask
 from src.web.sessions import ProjectStore, TaskState
@@ -25,7 +26,7 @@ app = FastAPI(title="Daywater", version="0.2.0")
 
 # ── Settings persistence ──────────────────────────────────────────────── #
 
-_SETTINGS_PATH = Path("/app/sessions/.daywater_settings.json") if Path("/app/sessions").exists() else Path("./sessions/.daywater_settings.json")
+_SETTINGS_PATH = sessions_root() / ".daywater_settings.json"
 
 
 def _load_settings() -> dict[str, str]:
@@ -76,8 +77,7 @@ app.add_middleware(
 )
 
 # Project store — configurable root for dev vs Docker.
-_projects_root = Path("/app/sessions") if Path("/app/sessions").exists() else Path("./sessions")
-store = ProjectStore(_projects_root)
+store = ProjectStore(sessions_root())
 
 
 def _get_project(project_id: str):  # type: ignore[no-untyped-def]
@@ -315,9 +315,7 @@ async def delete_task(project_id: str, task_id: str) -> dict:  # type: ignore[ty
     removed_docs = remove_research_docs_for_task(project.root, task_id)
 
     # Clean up Ghidra renames/notes created by this task
-    cache_root = Path("cache/binaries")
-    if not cache_root.exists():
-        cache_root = Path("/app/cache/binaries")
+    cache_root = binaries_cache()
     removed_renames = 0
     removed_notes = 0
     if cache_root.exists():
@@ -777,9 +775,7 @@ async def reset_knowledge(project_id: str) -> dict[str, bool]:
         shutil.rmtree(research_dir, ignore_errors=True)
 
     # Clear Ghidra notes/renames from all cached binaries
-    cache_root = Path("cache/binaries")
-    if not cache_root.exists():
-        cache_root = Path("/app/cache/binaries")
+    cache_root = binaries_cache()
     if cache_root.exists():
         for sha_dir in cache_root.iterdir():
             notes_path = sha_dir / "notes.json"
@@ -921,9 +917,7 @@ async def get_knowledge(project_id: str) -> dict:  # type: ignore[type-arg]
     findings = [asdict(f) for f in fs.list_all()]
 
     # Ghidra notes/renames from all analyzed binaries
-    cache_root = Path("cache/binaries")
-    if not cache_root.exists():
-        cache_root = Path("/app/cache/binaries")
+    cache_root = binaries_cache()
 
     renames: list[dict[str, str]] = []
     notes: list[dict[str, str]] = []
@@ -1233,7 +1227,7 @@ def main() -> None:
     inspect_proc = None
     try:
         inspect_proc = subprocess.Popen(
-            ["inspect", "view", "--host", "0.0.0.0", "--port", "7575", "--log-dir", "/app/logs"],
+            ["inspect", "view", "--host", "0.0.0.0", "--port", "7575", "--log-dir", str(logs_root())],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
