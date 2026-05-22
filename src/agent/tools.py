@@ -15,12 +15,10 @@ from pathlib import Path
 
 from inspect_ai.model import ContentImage, ContentText
 from inspect_ai.tool import Tool, ToolResult, tool
-from inspect_ai.util import store
 
 from src.agent.loader import load_sample_config, resolve_runtime_paths
 from src.agent.scorer import load_mask, score_against_mask
-from src.agent.state import BUDGET_KEY as _BUDGET_KEY
-from src.agent.state import LAST_PASS_KEY as _LAST_PASS_KEY
+from src.agent.state import sample_store
 from src.dolphin import (
     collect_dump,
     load_png_frames,
@@ -71,14 +69,13 @@ def run_gecko(sample_dir: Path) -> Tool:
             the budget is exhausted, returns a message saying so and does
             not run Dolphin.
         """
-        used = int(store().get(_BUDGET_KEY, 0))
+        used = sample_store.gecko_budget_used()
         if used >= cfg.verify_budget:
             return (
                 f"Budget exhausted ({used}/{cfg.verify_budget}). "
                 f"Submit your best answer; the final scorer will rerun whatever you last tried."
             )
-        store().set(_BUDGET_KEY, used + 1)
-        call_idx = used + 1
+        call_idx = sample_store.increment_gecko_budget()
         remaining = cfg.verify_budget - call_idx
 
         try:
@@ -136,7 +133,7 @@ def run_gecko(sample_dir: Path) -> Tool:
             # Remember the most recent PASS so the final scorer can fall back
             # to it if the agent forgets to submit a textual answer.
             if score.passed:
-                store().set(_LAST_PASS_KEY, gecko_text)
+                sample_store.set_last_pass_gecko(gecko_text)
 
             verdict_text = (
                 f"Call {call_idx}/{cfg.verify_budget} — verdict: {score.verdict}\n"

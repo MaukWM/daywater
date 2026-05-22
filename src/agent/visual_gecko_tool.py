@@ -12,12 +12,11 @@ from typing import TYPE_CHECKING
 
 from inspect_ai.model import ContentImage, ContentText
 from inspect_ai.tool import Tool, ToolResult, tool
-from inspect_ai.util import store as inspect_store
 from PIL import Image
 
 from src.agent.job_spec import JobSpec
 from src.agent.scorer import load_mask, score_against_mask
-from src.agent.state import BUDGET_KEY, LAST_PASS_KEY
+from src.agent.state import sample_store
 from src.dolphin import parse_gecko
 from src.dolphin.diff import load_image_rgb
 from src.runner import run_dolphin_with_retry
@@ -54,11 +53,10 @@ def build_run_gecko_for_task(task: "Task", project: "Project", spec: JobSpec) ->
                     f"Go back to the task wizard and paint the HUD mask."
                 )
 
-            used = int(inspect_store().get(BUDGET_KEY, 0))
+            used = sample_store.gecko_budget_used()
             if used >= spec.max_gecko_runs:
                 return f"Budget exhausted ({used}/{spec.max_gecko_runs}). Submit your best answer."
-            inspect_store().set(BUDGET_KEY, used + 1)
-            call_idx = used + 1
+            call_idx = sample_store.increment_gecko_budget()
             remaining = spec.max_gecko_runs - call_idx
 
             codes = parse_gecko(gecko_text)
@@ -89,7 +87,7 @@ def build_run_gecko_for_task(task: "Task", project: "Project", spec: JobSpec) ->
             )
 
             if mask_score.passed:
-                inspect_store().set(LAST_PASS_KEY, gecko_text)
+                sample_store.set_last_pass_gecko(gecko_text)
 
             # Encode frame as data URL for multimodal feedback.
             img = Image.fromarray(outcome.image)

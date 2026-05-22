@@ -1,14 +1,11 @@
-"""Shared per-Sample agent state, stored in Inspect AI's `store()`.
+"""Typed per-Sample agent state, backed by Inspect AI's ``store()``.
 
-Store keys are read + written across tool calls within the same Sample.
-Centralising them here keeps tools and the scorer consistent and avoids
-typo'd magic strings.
+All per-sample state is accessed through ``SampleStore``. Tools and the
+scorer import ``sample_store`` (module-level instance) or the convenience
+functions below — no raw magic-string keys leak outside this module.
 
-Notable: `CURRENT_BINARY_SHA1_KEY` lets the agent switch which Ghidra
-cache the read tools (`find_function`, `decompile`, ...) target during
-a session. Tools resolve the active cache lazily via
-`current_cache_dir` so a `switch_binary(sha1)` call takes effect for
-every subsequent call without re-binding tool closures.
+For MCP / non-Inspect backends, replace ``SampleStore._store()`` with a
+dict-backed alternative; the rest of the API stays the same.
 """
 
 from __future__ import annotations
@@ -19,45 +16,97 @@ from inspect_ai.util import store
 
 from src.ghidra.analyze import cache_dir_for_sha1
 
-# `run_gecko` budget counter (int).
-BUDGET_KEY = "daywater_run_gecko_used"
+
+class SampleStore:
+    """Typed wrapper around Inspect AI's per-sample key-value store."""
+
+    # Key constants — private to this class.
+    _BUDGET_KEY = "daywater_run_gecko_used"
+    _LAST_PASS_KEY = "daywater_last_pass_gecko"
+    _CURRENT_BINARY_SHA1_KEY = "daywater_current_binary_sha1"
+    _KNOWN_BINARIES_KEY = "daywater_known_binaries"
+
+    @staticmethod
+    def _store():  # type: ignore[no-untyped-def]
+        """Return the backing store. Override for non-Inspect backends."""
+        return store()
+
+    # ── Gecko budget ──────────────────────────────────────────────────── #
+
+    def gecko_budget_used(self) -> int:
+        """Number of ``run_gecko`` calls consumed so far."""
+        return int(self._store().get(self._BUDGET_KEY, 0))
+
+    def increment_gecko_budget(self) -> int:
+        """Consume one budget slot. Returns the new call index (1-based)."""
+        used = self.gecko_budget_used()
+        self._store().set(self._BUDGET_KEY, used + 1)
+        return used + 1
+
+    # ── Last passing gecko code ───────────────────────────────────────── #
+
+    def last_pass_gecko(self) -> str | None:
+        """Last gecko_text that earned a PASS, or None."""
+        val = self._store().get(self._LAST_PASS_KEY)
+        if isinstance(val, str) and val.strip():
+            return val
+        return None
+
+    def set_last_pass_gecko(self, gecko_text: str) -> None:
+        """Stash the most recent passing gecko code for scorer fallback."""
+        self._store().set(self._LAST_PASS_KEY, gecko_text)
+
+    # ── Active binary ─────────────────────────────────────────────────── #
+
+    def current_binary_sha1(self) -> str | None:
+        """SHA-1 of the binary the agent is currently exploring, or None."""
+        sha1 = self._store().get(self._CURRENT_BINARY_SHA1_KEY)
+        if isinstance(sha1, str) and sha1:
+            return sha1
+        return None
+
+    def set_current_binary(self, sha1: str, source_path: Path | None = None) -> None:
+        """Switch the active binary the read tools target."""
+        s = self._store()
+        s.set(self._CURRENT_BINARY_SHA1_KEY, sha1)
+        if source_path is not None:
+            known = dict(s.get(self._KNOWN_BINARIES_KEY, {}) or {})
+            known[sha1] = str(source_path)
+            s.set(self._KNOWN_BINARIES_KEY, known)
+
+    def current_cache_dir(self) -> Path | None:
+        """Cache dir for the selected binary, or None if none selected."""
+        sha1 = self.current_binary_sha1()
+        if sha1:
+            return cache_dir_for_sha1(sha1)
+        return None
+
+    def known_binaries(self) -> dict[str, str]:
+        """Snapshot of {sha1: source_path} for binaries analyzed this session."""
+        raw: dict[str, str] = self._store().get(self._KNOWN_BINARIES_KEY, {}) or {}
+        return {str(k): str(v) for k, v in raw.items()}
 
 
-# Last gecko_text that earned a PASS verdict (str). The scorer falls back
-# to this if the agent forgets to submit a textual answer.
-LAST_PASS_KEY = "daywater_last_pass_gecko"
+# Module-level instance — all callers share this.
+sample_store = SampleStore()
 
-# Current binary SHA-1 the agent is exploring. None / unset → no binary
-# selected yet; the agent must call `switch_binary` before any
-# static-analysis tool will return data.
-CURRENT_BINARY_SHA1_KEY = "daywater_current_binary_sha1"
 
-# Map of {sha1: source_binary_path_str} so `list_known_binaries` can show
-# the agent which binaries have already been analyzed this session.
-KNOWN_BINARIES_KEY = "daywater_known_binaries"
+# ── Convenience wrappers (preserve existing call sites) ───────────────── #
 
 
 def set_current_binary(sha1: str, source_path: Path | None = None) -> None:
     """Switch the active binary the read tools target."""
-    s = store()
-    s.set(CURRENT_BINARY_SHA1_KEY, sha1)
-    if source_path is not None:
-        known = dict(s.get(KNOWN_BINARIES_KEY, {}) or {})
-        known[sha1] = str(source_path)
-        s.set(KNOWN_BINARIES_KEY, known)
+    sample_store.set_current_binary(sha1, source_path)
 
 
 def current_cache_dir() -> Path | None:
-    """Cache dir for the binary the agent has selected, or None.
+    """Cache dir for the binary the agent has selected, or None."""
+    return sample_store.current_cache_dir()
 
-    Returns None when no `switch_binary` has been called yet. Read tools
-    must treat None as "agent needs to pick a binary first" and respond
-    with a pointer to the inventory in the initial user message.
-    """
-    sha1 = store().get(CURRENT_BINARY_SHA1_KEY)
-    if isinstance(sha1, str) and sha1:
-        return cache_dir_for_sha1(sha1)
-    return None
+
+def known_binaries() -> dict[str, str]:
+    """Snapshot of binaries the agent has analyzed this session."""
+    return sample_store.known_binaries()
 
 
 NO_BINARY_SELECTED_MSG = (
@@ -65,9 +114,3 @@ NO_BINARY_SELECTED_MSG = (
     "task description and call `switch_binary(<sha1>)` to pick one before "
     "using the static-analysis tools."
 )
-
-
-def known_binaries() -> dict[str, str]:
-    """Snapshot of binaries the agent has analyzed this session."""
-    raw: dict[str, str] = store().get(KNOWN_BINARIES_KEY, {}) or {}
-    return {str(k): str(v) for k, v in raw.items()}

@@ -41,7 +41,7 @@ def _pixel_diff_scorer(
 ) -> Scorer:
     """Grade via pixel diff against mask — same logic as the old web_scorer."""
     from src.agent.scorer import load_mask, score_against_mask
-    from src.agent.tools import _LAST_PASS_KEY
+    from src.agent.state import sample_store
     from src.dolphin import parse_gecko
     from src.dolphin.diff import load_image_rgb
 
@@ -49,15 +49,14 @@ def _pixel_diff_scorer(
 
     async def score(state: InspectTaskState, target: Target) -> Score:
         from inspect_ai.scorer import INCORRECT
-        from inspect_ai.util import store as inspect_store
 
         try:
             gecko_text = state.output.completion or ""
             codes = parse_gecko(gecko_text)
             fallback_used = False
             if not codes:
-                stashed = inspect_store().get(_LAST_PASS_KEY)
-                if isinstance(stashed, str) and stashed.strip():
+                stashed = sample_store.last_pass_gecko()
+                if stashed:
                     gecko_text = stashed
                     codes = parse_gecko(gecko_text)
                     fallback_used = bool(codes)
