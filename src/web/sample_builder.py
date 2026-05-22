@@ -18,7 +18,7 @@ from src.agent.job_spec import Capability, EvaluationMethod, JobSpec
 from src.agent.prompts.builder import build_system_prompt
 from src.agent.scorer_builder import build_scorer
 from src.agent.tools.builder import build_tools
-from src.findings import FindingsStore
+from src.knowledge import FindingsStore
 from src.web.sessions import Project, Task
 
 

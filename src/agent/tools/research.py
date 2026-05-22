@@ -1,113 +1,38 @@
 """Agent tools for per-project research documents.
 
-Each doc has metadata (summary, source task, timestamp) stored in
-.research_meta.json. The index is auto-generated from these summaries —
-the agent never writes INDEX.md directly.
-
-Storage layout::
-
-    <project_root>/research/
-    ├── .research_meta.json   # {filename: {summary, task_id, created_at}}
-    ├── npc-behaviour.md      # agent-created research doc
-    ├── shooting.md           # agent-created research doc
-    └── ...
+The storage layer lives in ``src.knowledge.research.ResearchStore``.
+This module provides the Inspect AI ``@tool`` wrappers that give the
+agent access to read, write, and list research docs.
 """
 
 from __future__ import annotations
 
-import json
 import time
 from pathlib import Path
 
 from inspect_ai.tool import Tool, tool
 
-
-def _research_dir(project_root: Path) -> Path:
-    d = project_root / "research"
-    d.mkdir(parents=True, exist_ok=True)
-    return d
-
-
-def _meta_path(research_dir: Path) -> Path:
-    return research_dir / ".research_meta.json"
-
-
-def _load_meta(research_dir: Path) -> dict[str, dict[str, str | float]]:
-    """Load research doc metadata. Returns {filename: {summary, task_id, created_at}}."""
-    path = _meta_path(research_dir)
-    if not path.exists():
-        return {}
-    try:
-        return json.loads(path.read_text())
-    except (json.JSONDecodeError, ValueError):
-        return {}
-
-
-def _save_meta(research_dir: Path, meta: dict[str, dict[str, str | float]]) -> None:
-    _meta_path(research_dir).write_text(json.dumps(meta, indent=2))
+from src.knowledge.research import ResearchStore
 
 
 def build_index(project_root: Path) -> str:
-    """Build the research index from doc metadata. Used by agent + frontend."""
-    rd = _research_dir(project_root)
-    meta = _load_meta(rd)
-
-    # Also pick up orphan docs (created before metadata tracking)
-    on_disk = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
-
-    if not on_disk and not meta:
-        return "# Research Index\n\nNo research documents yet."
-
-    lines = ["# Research Index\n"]
-    for filename in on_disk:
-        entry = meta.get(filename, {})
-        summary = entry.get("summary", "(no summary)")
-        lines.append(f"- **{filename}** — {summary}")
-
-    return "\n".join(lines)
+    """Build the research index. Convenience wrapper for external callers."""
+    return ResearchStore(project_root).build_index()
 
 
 def list_docs(project_root: Path) -> list[dict[str, str]]:
-    """Return structured doc list for the frontend."""
-    rd = _research_dir(project_root)
-    meta = _load_meta(rd)
-    on_disk = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
-
-    result = []
-    for filename in on_disk:
-        entry = meta.get(filename, {})
-        result.append({
-            "filename": filename,
-            "summary": str(entry.get("summary", "")),
-            "task_id": str(entry.get("task_id", "")),
-            "created_at": float(entry.get("created_at", 0)),
-        })
-    return result
+    """Return structured doc list. Convenience wrapper for external callers."""
+    return ResearchStore(project_root).list_docs()
 
 
 def get_research_docs_for_task(project_root: Path, task_id: str) -> list[str]:
     """Return filenames of research docs created by a specific task."""
-    rd = _research_dir(project_root)
-    meta = _load_meta(rd)
-    return [fn for fn, entry in meta.items() if entry.get("task_id") == task_id]
+    return ResearchStore(project_root).docs_for_task(task_id)
 
 
 def remove_research_docs_for_task(project_root: Path, task_id: str) -> list[str]:
-    """Delete all research docs created by a specific task. Returns deleted filenames."""
-    rd = _research_dir(project_root)
-    meta = _load_meta(rd)
-
-    deleted = []
-    for fn in list(meta.keys()):
-        if meta[fn].get("task_id") == task_id:
-            doc_path = rd / fn
-            if doc_path.exists():
-                doc_path.unlink()
-                deleted.append(fn)
-            del meta[fn]
-
-    _save_meta(rd, meta)
-    return deleted
+    """Delete all research docs created by a specific task."""
+    return ResearchStore(project_root).remove_docs_for_task(task_id)
 
 
 # ── Agent tools ──────────────────────────────────────────────────────── #
@@ -117,6 +42,8 @@ def remove_research_docs_for_task(project_root: Path, task_id: str) -> list[str]
 def list_research(project_root: Path) -> Tool:
     """Build the ``list_research`` tool bound to a project directory."""
 
+    _store = ResearchStore(project_root)
+
     async def execute() -> str:
         """Read the research index for this game.
 
@@ -124,7 +51,7 @@ def list_research(project_root: Path) -> Tool:
         their summaries. Always check this at the start of a run to see
         what prior tasks have already documented.
         """
-        return build_index(project_root)
+        return _store.build_index()
 
     return execute
 
@@ -132,6 +59,8 @@ def list_research(project_root: Path) -> Tool:
 @tool
 def read_research(project_root: Path) -> Tool:
     """Build the ``read_research`` tool bound to a project directory."""
+
+    _store = ResearchStore(project_root)
 
     async def execute(filename: str) -> str:
         """Read a research document.
@@ -143,15 +72,14 @@ def read_research(project_root: Path) -> Tool:
         if not filename.endswith(".md"):
             filename += ".md"
 
-        rd = _research_dir(project_root)
-        path = rd / filename
+        path = _store.dir / filename
 
         if not path.exists():
-            available = sorted(p.name for p in rd.glob("*.md") if p.name != "INDEX.md")
+            available = sorted(p.name for p in _store.dir.glob("*.md") if p.name != "INDEX.md")
             return f"Document '{filename}' not found. Available: {', '.join(available) or 'none'}"
 
         # Prevent path traversal
-        if not path.resolve().is_relative_to(rd.resolve()):
+        if not path.resolve().is_relative_to(_store.dir.resolve()):
             return "Error: invalid filename."
 
         return path.read_text()
@@ -162,6 +90,8 @@ def read_research(project_root: Path) -> Tool:
 @tool
 def write_research(project_root: Path, task_id: str = "") -> Tool:
     """Build the ``write_research`` tool bound to a project directory."""
+
+    _store = ResearchStore(project_root)
 
     async def execute(filename: str, content: str, summary: str = "") -> str:
         """Write or update a research document.
@@ -194,11 +124,10 @@ def write_research(project_root: Path, task_id: str = "") -> Tool:
                 "'player-movement.md') and provide a summary."
             )
 
-        rd = _research_dir(project_root)
-        path = rd / filename
+        path = _store.dir / filename
 
         # Prevent path traversal
-        if not path.resolve().is_relative_to(rd.resolve()):
+        if not path.resolve().is_relative_to(_store.dir.resolve()):
             return "Error: invalid filename."
 
         if not content.strip():
@@ -207,14 +136,14 @@ def write_research(project_root: Path, task_id: str = "") -> Tool:
         path.write_text(content)
 
         # Update metadata
-        meta = _load_meta(rd)
+        meta = _store.load_meta()
         existing = meta.get(filename, {})
         meta[filename] = {
             "summary": summary.strip() or str(existing.get("summary", "")),
             "task_id": task_id or str(existing.get("task_id", "")),
             "created_at": float(existing.get("created_at", 0)) or time.time(),
         }
-        _save_meta(rd, meta)
+        _store.save_meta(meta)
 
         return f"Written: research/{filename} ({len(content)} bytes). Summary: {summary or '(unchanged)'}"
 

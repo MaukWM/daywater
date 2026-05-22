@@ -10,7 +10,7 @@ from pathlib import Path
 
 from inspect_ai.tool import Tool, tool
 
-from src.findings import FindingsStore
+from src.knowledge import FindingKind, FindingsStore
 
 
 # ── Project-scoped findings ──────────────────────────────────────────── #

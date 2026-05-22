@@ -31,8 +31,11 @@ import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Literal
 
 FINDINGS_VERSION = 1
+
+FindingKind = Literal["address", "function", "note"]
 
 
 @dataclass
@@ -40,7 +43,7 @@ class Finding:
     """A single discovery about the game."""
 
     id: str
-    kind: str  # "address" | "function" | "note"
+    kind: FindingKind
     address: str  # lowercase hex, no 0x prefix; "" for notes
     label: str
     detail: str
@@ -100,7 +103,7 @@ class FindingsStore:
 
     def add(
         self,
-        kind: str,
+        kind: FindingKind,
         label: str,
         detail: str,
         address: str = "",

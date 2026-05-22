@@ -7,7 +7,7 @@ import shutil
 from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
-from src.findings import FindingsStore
+from src.knowledge import FindingsStore
 from src.ghidra.notes import NotesStore
 from src.paths import binaries_cache
 from src.web.api.deps import _get_project, _get_task
