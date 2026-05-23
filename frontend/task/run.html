@@ -318,9 +318,10 @@
         document.getElementById('run-seconds-row').hidden = true;
       }
 
-      // Pre-fill agent prompt
-      if (task.target_description) {
-        document.getElementById('agent-prompt').value = task.target_description;
+      // Pre-fill agent prompt from job_spec
+      const targetDesc = (task.job_spec || {}).target_description || '';
+      if (targetDesc) {
+        document.getElementById('agent-prompt').value = targetDesc;
       }
 
       // Apply current state
