@@ -21,7 +21,7 @@ services:
       - ./cache:/app/cache
       - ./logs:/app/logs
       - ./roms:/data/roms:ro
-      - ./src/web/static:/app/src/web/static:ro  # hot-reload frontend in dev
+      - ./frontend:/app/frontend:ro  # hot-reload frontend in dev
     command: ["daywater-web"]
 
   # Legacy CLI-only service (optional, for manual runs).

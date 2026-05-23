@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from src.core.knowledge import FindingsStore
-from src.web.api.deps import _get_project, _get_savestate
+from src.api.routes.deps import _get_project, _get_savestate
 from src.core.uploads import save_savestate_to_project
 
 router = APIRouter()

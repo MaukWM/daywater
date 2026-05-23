@@ -11,8 +11,8 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from src.core.ghidra import list_iso_files
-from src.web.api.deps import _get_project, store
-from src.web.events import stream_events
+from src.api.routes.deps import _get_project, store
+from src.api.events import stream_events
 from src.core.uploads import save_iso
 
 router = APIRouter()

@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.scripts]
-daywater-web = "src.web.app:main"
+daywater-web = "src.api.app:main"
 
 [build-system]
 requires = ["hatchling"]

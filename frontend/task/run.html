@@ -410,6 +410,8 @@
     function showReferencePreview() {
       const preview = document.getElementById('reference-preview');
       const img = document.getElementById('reference-img');
+      img.onload = () => { preview.hidden = false; };
+      img.onerror = () => { preview.hidden = true; };
       img.src = `${TBASE}/files/reference.png?_=${Date.now()}`;
       preview.hidden = false;
     }

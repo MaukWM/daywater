@@ -1,7 +1,7 @@
 """Dolphin frame capture with glitch retry.
 
 Runs Dolphin with Gecko codes, captures frames, and retries on render
-glitches. No imports from src.agent or src.web.
+glitches. No imports from src.agent or src.api.
 """
 
 from __future__ import annotations

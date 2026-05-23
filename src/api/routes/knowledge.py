@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from src.core.ghidra.notes import NotesStore
 from src.core.knowledge import FindingsStore, GeckoCodeStore, ResearchStore
 from src.core.paths import binaries_cache
-from src.web.api.deps import _get_project
+from src.api.routes.deps import _get_project
 
 router = APIRouter()
 

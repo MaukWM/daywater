@@ -10,14 +10,14 @@ from fastapi.staticfiles import StaticFiles
 
 from src.core.config import web_settings
 from src.core.paths import logs_root
-from src.web.api.knowledge import router as knowledge_router
-from src.web.api.processes import router as processes_router
-from src.web.api.projects import router as projects_router
-from src.web.api.savestates import router as savestates_router
-from src.web.api.schema import router as schema_router
-from src.web.api.settings import router as settings_router
-from src.web.api.setup import router as setup_router
-from src.web.api.tasks import router as tasks_router
+from src.api.routes.knowledge import router as knowledge_router
+from src.api.routes.processes import router as processes_router
+from src.api.routes.projects import router as projects_router
+from src.api.routes.savestates import router as savestates_router
+from src.api.routes.schema import router as schema_router
+from src.api.routes.settings import router as settings_router
+from src.api.routes.setup import router as setup_router
+from src.api.routes.tasks import router as tasks_router
 
 app = FastAPI(title="Daywater", version="0.2.0")
 
@@ -44,13 +44,9 @@ app.include_router(processes_router)
 
 # ── Static frontend ─────────────────────────────────────────────────── #
 
-# Try frontend/ (new MPA) first, fall back to static/ (legacy monolith)
 _frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
-_static_dir = Path(__file__).parent / "static"
 if _frontend_dir.exists():
     app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
-elif _static_dir.exists():
-    app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
 
 
 # ── Entry point ──────────────────────────────────────────────────────── #
@@ -74,7 +70,7 @@ def main() -> None:
 
     try:
         uvicorn.run(
-            "src.web.app:app",
+            "src.api.app:app",
             host="0.0.0.0",
             port=7860,
             reload=False,

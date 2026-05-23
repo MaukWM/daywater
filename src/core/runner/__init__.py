@@ -1,7 +1,7 @@
 """Eval-lifecycle runner: Dolphin retry, frame capture, orphan kill.
 
 Sits between the dolphin subprocess wrapper (src.dolphin) and the
-agent/web orchestration layers. No imports from src.agent or src.web.
+agent/api orchestration layers. No imports from src.agent or src.api.
 """
 
 from src.core.runner.dolphin_runner import (
