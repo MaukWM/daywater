@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Task — Daywater</title>
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body>
+
+  <div class="task-page" style="display:flex;">
+    <div class="proj-topbar">
+      <nav class="breadcrumb" id="breadcrumb"></nav>
+      <div class="proj-info-row" id="proj-identity"></div>
+    </div>
+    <div class="task-page-body">
+      <div class="ntc">
+        <h2>Create Task</h2>
+        <p class="ntc-subtitle">Configure what the agent should do, which tools it gets, and how it's evaluated.</p>
+
+        <!-- Task Name -->
+        <div class="ntc-section">
+          <span class="ntc-label">Task name</span>
+          <input type="text" id="nt-name" placeholder="e.g. Remove minimap, Find player XYZ, Noclip v2..." style="width:100%;">
+          <p class="ntc-hint">Short name shown in the task list and Inspect AI viewer.</p>
+        </div>
+
+        <!-- Presets -->
+        <div class="ntc-section">
+          <span class="ntc-label">Quick start</span>
+          <div class="preset-row" id="preset-buttons"></div>
+          <p class="ntc-hint">Pick a preset to pre-fill defaults, then customize below.</p>
+        </div>
+
+        <!-- Objective -->
+        <div class="ntc-section">
+          <span class="ntc-label">Objective</span>
+          <div class="ntc-obj-row">
+            <div>
+              <select id="nt-goal-type" style="width:100%;">
+                <option value="find_code_patch">Find code patch</option>
+                <option value="find_ram_address">Find RAM address</option>
+                <option value="static_research">Static research</option>
+              </select>
+              <p class="ntc-hint">What the agent produces.</p>
+            </div>
+            <div>
+              <textarea id="nt-target" rows="2" style="width:100%;" placeholder="e.g. Remove all HUD elements, Find player health address, Analyze collision system..."></textarea>
+              <p class="ntc-hint">Natural language description of the specific goal.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Evaluation -->
+        <div class="ntc-section">
+          <span class="ntc-label">Evaluation</span>
+          <select id="nt-evaluation" style="width:100%;">
+            <option value="manual_review">Manual review</option>
+            <option value="pixel_diff_mask">Pixel diff mask</option>
+          </select>
+          <p class="ntc-hint">
+            <strong>Manual review</strong>: RE engineer judges the agent's findings.
+            <strong>Pixel diff</strong>: automated pass/fail by comparing frames against a painted mask.
+          </p>
+        </div>
+
+        <!-- Capabilities -->
+        <div class="ntc-section">
+          <span class="ntc-label">Agent capabilities</span>
+          <div class="cap-grid" id="nt-capabilities"></div>
+        </div>
+
+        <!-- Input Mutation Hints -->
+        <div class="ntc-section" id="nt-hints-section" style="display:none;">
+          <span class="ntc-label">Input-mutation hints</span>
+          <p class="ntc-hint" style="margin-top:0; margin-bottom:0.5rem;">Tell the agent which controller inputs should change the target value, so it can verify candidates.</p>
+          <div id="nt-hints-list"></div>
+          <button id="add-hint-btn" style="font-size:0.72rem; padding:0.25rem 0.6rem; margin-top:0.3rem;">+ add hint</button>
+        </div>
+
+        <!-- Budget -->
+        <div class="ntc-section">
+          <span class="ntc-label">Budget</span>
+          <div class="budget-row">
+            <div class="budget-field">
+              <label>Message limit</label>
+              <input type="number" id="nt-message-limit" value="200" min="50" max="1000">
+            </div>
+            <div class="budget-field">
+              <label>Run seconds</label>
+              <input type="number" id="nt-run-seconds" value="10" min="5" max="60">
+            </div>
+          </div>
+          <p class="ntc-hint">Message limit caps the total agent conversation. Run seconds is per Dolphin boot.</p>
+        </div>
+
+        <!-- Errors + Submit -->
+        <div id="nt-errors" style="color:var(--red); font-size:0.8rem; margin-bottom:0.5rem;" hidden></div>
+        <button id="create-btn" class="primary">Create Task</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api, param } from '../shared/api.js';
+    import { renderLayout, breadcrumb } from '../shared/layout.js';
+
+    renderLayout();
+
+    const projectId = param('p');
+
+    // ── State ──────────────────────────────────────────────────────── //
+
+    let CAP_DEFS = [];
+    const PRESETS_CACHE = {};
+
+    const HINT_INPUT_OPTIONS = [
+      { group: 'Buttons', options: ['A', 'B', 'X', 'Y', 'Z', 'START'] },
+      { group: 'Triggers', options: ['L', 'R'] },
+      { group: 'D-Pad', options: ['D_UP', 'D_DOWN', 'D_LEFT', 'D_RIGHT'] },
+      { group: 'Main Stick', options: ['stick_main forward', 'stick_main backward', 'stick_main left', 'stick_main right'] },
+      { group: 'C-Stick', options: ['stick_c up', 'stick_c down', 'stick_c left', 'stick_c right'] },
+      { group: 'Other', options: ['wait (no input)'] },
+    ];
+
+    // ── DOM refs ───────────────────────────────────────────────────── //
+
+    const goalTypeEl = document.getElementById('nt-goal-type');
+    const evaluationEl = document.getElementById('nt-evaluation');
+    const hintsSection = document.getElementById('nt-hints-section');
+    const hintsList = document.getElementById('nt-hints-list');
+    const capGrid = document.getElementById('nt-capabilities');
+    const presetBtns = document.getElementById('preset-buttons');
+    const errEl = document.getElementById('nt-errors');
+
+    // ── Load project info ──────────────────────────────────────────── //
+
+    async function loadProjectInfo() {
+      const p = await api('GET', `/api/projects/${projectId}`);
+      const displayName = p.name || p.game_id || projectId;
+
+      breadcrumb(document.getElementById('breadcrumb'), [
+        { text: 'Projects', href: '/index.html' },
+        { text: displayName, href: `/project.html?id=${projectId}` },
+        { text: 'new task' },
+      ]);
+
+      const surveyText = p.survey_complete
+        ? `<span class="proj-tag green">${p.survey_binaries_done} binaries</span>`
+        : `<span class="proj-tag amber">analyzing ${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}</span>`;
+
+      document.getElementById('proj-identity').innerHTML = `
+        <span class="proj-game-id">${displayName}</span>
+        <span class="proj-meta">${p.game_id}</span>
+        <span class="proj-meta">${p.iso_sha1 ? p.iso_sha1.slice(0, 12) : ''}</span>
+        <span class="proj-meta">${p.iso_size ? (p.iso_size / 1e6).toFixed(0) + ' MB' : ''}</span>
+        ${surveyText}
+      `;
+    }
+
+    // ── Presets ─────────────────────────────────────────────────────── //
+
+    async function loadPresets() {
+      try {
+        const presets = await api('GET', '/api/presets');
+        presetBtns.innerHTML = presets.map(p =>
+          `<button class="preset-btn" data-preset="${p.name}" title="${p.description}">${p.name.replace(/_/g, ' ')}</button>`
+        ).join('');
+        presets.forEach(p => { PRESETS_CACHE[p.name] = p.job_spec; });
+
+        presetBtns.addEventListener('click', (e) => {
+          const btn = e.target.closest('.preset-btn');
+          if (!btn) return;
+          applyPreset(btn.dataset.preset);
+        });
+      } catch (e) {
+        console.error('Failed to load presets:', e);
+      }
+    }
+
+    function applyPreset(name) {
+      const spec = PRESETS_CACHE[name];
+      if (!spec) return;
+
+      // Highlight active preset
+      presetBtns.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+      const btn = presetBtns.querySelector(`[data-preset="${name}"]`);
+      if (btn) btn.classList.add('active');
+
+      // Goal type
+      goalTypeEl.value = spec.goal_type;
+
+      // Target
+      document.getElementById('nt-target').value = spec.target_description || '';
+
+      // Capabilities
+      const caps = new Set(spec.capabilities || []);
+      capGrid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.checked = caps.has(cb.value);
+      });
+
+      // Evaluation
+      evaluationEl.value = spec.evaluation || 'manual_review';
+
+      // Budget
+      document.getElementById('nt-message-limit').value = spec.message_limit || 200;
+      document.getElementById('nt-run-seconds').value = spec.run_seconds || 10;
+
+      // Hints
+      hintsList.innerHTML = '';
+      (spec.input_mutation_hints || []).forEach(h => {
+        addHintRow(h.input_description, h.expected_effect);
+      });
+
+      syncCapabilities();
+    }
+
+    // ── Schema + Capabilities ──────────────────────────────────────── //
+
+    async function loadSchema() {
+      try {
+        const schema = await api('GET', '/api/schema');
+        CAP_DEFS = schema.capabilities.map(c => ({
+          ...c,
+          requiredBy: c.required_by,
+        }));
+      } catch (e) {
+        console.error('Failed to load schema:', e);
+      }
+      renderCapabilities();
+      syncCapabilities();
+    }
+
+    function renderCapabilities() {
+      capGrid.innerHTML = CAP_DEFS.filter(cap => !cap.hidden).map(cap => `
+        <label class="cap-card" id="cap-item-${cap.id}" data-reason="">
+          <div class="cap-cb">
+            <input type="checkbox" value="${cap.id}" id="cap-cb-${cap.id}">
+          </div>
+          <div class="cap-body">
+            <div class="cap-title">${cap.name}</div>
+            <div class="cap-detail">${cap.desc}</div>
+          </div>
+        </label>
+      `).join('');
+
+      // Wire up checkbox change events
+      capGrid.querySelectorAll('input[type=checkbox]').forEach(cb => {
+        cb.addEventListener('change', syncCapabilities);
+      });
+    }
+
+    function syncCapabilities() {
+      const goal = goalTypeEl.value;
+      const eval_ = evaluationEl.value;
+
+      for (const cap of CAP_DEFS) {
+        const cb = document.getElementById(`cap-cb-${cap.id}`);
+        const card = document.getElementById(`cap-item-${cap.id}`);
+        if (!cb || !card) continue;
+
+        let forced = false;
+        let reason = '';
+
+        // Always-on caps
+        if (cap.id === 'static_re' || cap.id === 'discovery') {
+          cb.checked = true;
+          cb.disabled = true;
+          forced = true;
+          reason = 'always on';
+        }
+
+        // Required by goal type
+        if (cap.requiredBy?.goal?.includes(goal)) {
+          cb.checked = true;
+          cb.disabled = true;
+          forced = true;
+          reason = 'required by goal';
+        }
+
+        // Required by evaluation method
+        if (cap.requiredBy?.eval?.includes(eval_)) {
+          cb.checked = true;
+          cb.disabled = true;
+          forced = true;
+          reason = 'required by eval';
+        }
+
+        // Dependencies: auto-enable deps of checked caps
+        if (cap.requires) {
+          for (const dep of cap.requires) {
+            const depCb = document.getElementById(`cap-cb-${dep}`);
+            if (cb.checked && depCb && !depCb.checked) {
+              depCb.checked = true;
+            }
+          }
+        }
+
+        if (!forced) {
+          cb.disabled = false;
+        }
+
+        card.classList.toggle('cap-on', cb.checked);
+        card.classList.toggle('cap-locked', forced);
+        card.dataset.reason = forced ? reason : '';
+      }
+
+      // Show/hide hints section based on goal type
+      hintsSection.style.display = goal === 'find_ram_address' ? '' : 'none';
+    }
+
+    // ── Input Mutation Hints ───────────────────────────────────────── //
+
+    function buildInputSelect(selected) {
+      let html = '<select class="hint-input" style="flex:1;">';
+      html += '<option value="">-- select input --</option>';
+      for (const g of HINT_INPUT_OPTIONS) {
+        html += `<optgroup label="${g.group}">`;
+        for (const o of g.options) {
+          const sel = o === selected ? ' selected' : '';
+          html += `<option value="${o}"${sel}>${o}</option>`;
+        }
+        html += '</optgroup>';
+      }
+      html += '</select>';
+      return html;
+    }
+
+    function addHintRow(inputDesc, expectedEffect) {
+      const row = document.createElement('div');
+      row.className = 'hint-row';
+      row.innerHTML = `
+        ${buildInputSelect(inputDesc || '')}
+        <span class="hint-arrow">\u2192</span>
+        <input type="text" class="hint-effect" placeholder="Expected effect (e.g. value decreases by 1)" value="${expectedEffect || ''}">
+        <button class="danger hint-remove" style="padding:0.15rem 0.4rem; font-size:0.68rem;">x</button>
+      `;
+      row.querySelector('.hint-remove').addEventListener('click', () => row.remove());
+      hintsList.appendChild(row);
+    }
+
+    document.getElementById('add-hint-btn').addEventListener('click', () => addHintRow());
+
+    // ── Collect spec + submit ──────────────────────────────────────── //
+
+    function collectJobSpec() {
+      const capabilities = [];
+      capGrid.querySelectorAll('input[type=checkbox]:checked').forEach(cb => {
+        capabilities.push(cb.value);
+      });
+
+      // Include hidden caps required by the current evaluation method
+      const eval_ = evaluationEl.value;
+      for (const cap of CAP_DEFS) {
+        if (cap.hidden && cap.requiredBy?.eval?.includes(eval_) && !capabilities.includes(cap.id)) {
+          capabilities.push(cap.id);
+        }
+      }
+
+      const hints = [];
+      hintsList.querySelectorAll('.hint-row').forEach(row => {
+        const input = row.querySelector('.hint-input').value.trim();
+        const effect = row.querySelector('.hint-effect').value.trim();
+        if (input && effect) hints.push({ input_description: input, expected_effect: effect });
+      });
+
+      return {
+        goal_type: goalTypeEl.value,
+        capabilities,
+        evaluation: evaluationEl.value,
+        target_description: document.getElementById('nt-target').value.trim(),
+        input_mutation_hints: hints,
+        message_limit: parseInt(document.getElementById('nt-message-limit').value),
+        run_seconds: parseInt(document.getElementById('nt-run-seconds').value),
+      };
+    }
+
+    async function submitNewTask() {
+      const spec = collectJobSpec();
+      const taskName = document.getElementById('nt-name').value.trim();
+      errEl.hidden = true;
+
+      try {
+        const result = await api('POST', `/api/projects/${projectId}/tasks`, { job_spec: spec, name: taskName });
+        window.location.href = `/task/run.html?p=${projectId}&t=${result.task_id}`;
+      } catch (e) {
+        errEl.textContent = e.message;
+        errEl.hidden = false;
+      }
+    }
+
+    document.getElementById('create-btn').addEventListener('click', submitNewTask);
+
+    // ── Wire up change handlers ────────────────────────────────────── //
+
+    goalTypeEl.addEventListener('change', syncCapabilities);
+    evaluationEl.addEventListener('change', syncCapabilities);
+
+    // ── Init ───────────────────────────────────────────────────────── //
+
+    await Promise.all([loadProjectInfo(), loadPresets(), loadSchema()]);
+  </script>
+</body>
+</html>

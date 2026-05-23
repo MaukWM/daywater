@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daywater</title>
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body>
+  <main>
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <ul class="project-list" id="project-list"></ul>
+    <div id="no-projects" class="empty-state" hidden>
+      No projects yet. Upload an ISO to get started.
+    </div>
+    <div class="upload-form">
+      <label>New project &mdash; upload a GameCube ISO:</label>
+      <div class="file-pick">
+        <input type="file" id="iso-file" accept=".iso,.nkit.iso,.rvz">
+        <button type="button" class="file-btn" id="file-btn">Choose file</button>
+        <span class="file-btn-name" id="file-name">No file selected</span>
+      </div>
+      <button id="upload-btn" disabled>Upload</button>
+      <div class="progress-bar" id="upload-progress" hidden>
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-text" id="progress-text" hidden></div>
+    </div>
+  </main>
+
+  <script type="module">
+    import { api, timeAgo } from './shared/api.js';
+    import { renderLayout } from './shared/layout.js';
+
+    renderLayout();
+
+    // ── Setup gate ──────────────────────────────────────────────────────── //
+
+    async function checkSetup() {
+      try {
+        const settings = await api('GET', '/api/settings');
+        if (!settings.setup_complete) {
+          window.location.href = '/setup.html';
+        }
+      } catch (e) {
+        console.error('settings_check_failed', e);
+      }
+    }
+
+    // ── Project list ────────────────────────────────────────────────────── //
+
+    async function loadProjects() {
+      const listEl = document.getElementById('project-list');
+      const emptyEl = document.getElementById('no-projects');
+
+      try {
+        const projects = await api('GET', '/api/projects');
+
+        if (!projects.length) {
+          listEl.innerHTML = '';
+          emptyEl.hidden = false;
+          return;
+        }
+
+        emptyEl.hidden = true;
+        listEl.innerHTML = projects.map(p => {
+          const shaPrefix = p.iso_sha1 ? p.iso_sha1.slice(0, 8) : '';
+          const age = p.created_at ? timeAgo(p.created_at) : '';
+          const survey = p.survey_complete
+            ? `<span class="status-tag ready">${p.survey_binaries_done} binaries</span>`
+            : `<span class="status-tag analyzing">analyzing...</span>`;
+
+          return `<li data-id="${p.project_id}">
+            <span class="cursor">&gt;</span>
+            <span class="game-id">${p.name || p.game_id || '...'}</span>
+            <span class="meta">${shaPrefix} &middot; ${age}</span>
+            ${survey}
+            <button class="danger delete-btn" data-id="${p.project_id}">x</button>
+          </li>`;
+        }).join('');
+
+        // Row click -> project detail
+        listEl.querySelectorAll('li').forEach(li => {
+          li.addEventListener('click', (e) => {
+            if (e.target.classList.contains('delete-btn')) return;
+            window.location.href = `/project.html?id=${li.dataset.id}`;
+          });
+        });
+
+        // Delete buttons
+        listEl.querySelectorAll('.delete-btn').forEach(btn => {
+          btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (!confirm('Delete this project and all its data?')) return;
+            try {
+              await api('DELETE', `/api/projects/${btn.dataset.id}`);
+              loadProjects();
+            } catch (err) {
+              alert('Delete failed: ' + err.message);
+            }
+          });
+        });
+      } catch (e) {
+        console.error('projects_load_failed', e);
+        listEl.innerHTML = '<li style="color:var(--red);">Failed to load projects.</li>';
+      }
+    }
+
+    // ── Upload flow ─────────────────────────────────────────────────────── //
+
+    const fileInput = document.getElementById('iso-file');
+    const fileNameEl = document.getElementById('file-name');
+    const uploadBtn = document.getElementById('upload-btn');
+    const fileBtnEl = document.getElementById('file-btn');
+    const progressWrap = document.getElementById('upload-progress');
+    const progressFill = document.getElementById('progress-fill');
+    const progressText = document.getElementById('progress-text');
+
+    fileBtnEl.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files.length) {
+        const f = fileInput.files[0];
+        fileNameEl.textContent = `${f.name} (${(f.size / 1e6).toFixed(0)} MB)`;
+        uploadBtn.disabled = false;
+      } else {
+        fileNameEl.textContent = 'No file selected';
+        uploadBtn.disabled = true;
+      }
+    });
+
+    uploadBtn.addEventListener('click', async () => {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      uploadBtn.disabled = true;
+      progressWrap.hidden = false;
+      progressText.hidden = false;
+
+      try {
+        const { project_id } = await api('POST', '/api/projects');
+
+        await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          const formData = new FormData();
+          formData.append('file', file);
+
+          xhr.upload.addEventListener('progress', (e) => {
+            if (e.lengthComputable) {
+              const pct = (e.loaded / e.total) * 100;
+              progressFill.style.width = pct + '%';
+              const mb = (e.loaded / 1e6).toFixed(0);
+              const total = (e.total / 1e6).toFixed(0);
+              progressText.textContent = `uploading: ${mb} / ${total} MB (${pct.toFixed(0)}%)`;
+            }
+          });
+
+          xhr.upload.addEventListener('load', () => {
+            progressFill.style.width = '100%';
+            progressText.textContent = 'hashing ISO (SHA-1)...';
+          });
+
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else {
+              let msg = xhr.statusText;
+              try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
+              reject(new Error(msg));
+            }
+          });
+
+          xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+          xhr.open('POST', `/api/projects/${project_id}/upload/iso`);
+          xhr.send(formData);
+        });
+
+        window.location.href = `/project.html?id=${project_id}`;
+      } catch (e) {
+        alert('Upload failed: ' + e.message);
+        uploadBtn.disabled = false;
+        progressWrap.hidden = true;
+        progressText.hidden = true;
+        progressFill.style.width = '0%';
+      }
+    });
+
+    // ── Init ────────────────────────────────────────────────────────────── //
+
+    await checkSetup();
+    await loadProjects();
+  </script>
+</body>
+</html>

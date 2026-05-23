@@ -44,8 +44,12 @@ app.include_router(processes_router)
 
 # ── Static frontend ─────────────────────────────────────────────────── #
 
+# Try frontend/ (new MPA) first, fall back to static/ (legacy monolith)
+_frontend_dir = Path(__file__).resolve().parent.parent.parent / "frontend"
 _static_dir = Path(__file__).parent / "static"
-if _static_dir.exists():
+if _frontend_dir.exists():
+    app.mount("/", StaticFiles(directory=str(_frontend_dir), html=True), name="frontend")
+elif _static_dir.exists():
     app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
 
 

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daywater — Setup</title>
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body>
+  <div class="setup-container">
+
+    <!-- Branding -->
+    <div class="setup-header">
+      <div class="setup-title">DAYWATER</div>
+      <div class="setup-sub">first-launch initialization</div>
+    </div>
+
+    <!-- Step indicator dots -->
+    <div class="setup-steps-bar">
+      <div class="setup-step-dot active" data-step="1">1</div>
+      <div class="setup-step-line"></div>
+      <div class="setup-step-dot" data-step="2">2</div>
+      <div class="setup-step-line"></div>
+      <div class="setup-step-dot" data-step="3">3</div>
+    </div>
+
+    <!-- Step 1: API key + model -->
+    <div id="step-1" class="setup-step">
+      <div class="setup-step-title">API Key &amp; Model</div>
+      <div class="setup-step-desc">Configure the LLM backend used for agent runs.</div>
+
+      <div class="setup-field">
+        <label class="setup-label" for="api-key">API Key</label>
+        <div style="display:flex; gap:0.4rem;">
+          <input type="password" id="api-key" class="setup-input" placeholder="sk-..." style="flex:1;">
+          <button type="button" id="key-vis-btn" onclick="toggleKeyVisibility()">show</button>
+        </div>
+        <div class="setup-field-hint">Your OpenAI (or compatible) API key.</div>
+      </div>
+
+      <div class="setup-field">
+        <label class="setup-label" for="model">Model</label>
+        <input type="text" id="model" class="setup-input" value="openai/gpt-5.5" placeholder="openai/gpt-5.5">
+        <div class="setup-field-hint">e.g. openai/gpt-5.5, anthropic/claude-sonnet-4-5-20250514</div>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:0.75rem; margin-top:1rem;">
+        <button type="button" id="test-btn" onclick="testConnection()">Test Connection</button>
+        <div id="test-result" class="setup-test-result" hidden></div>
+      </div>
+
+      <div style="margin-top:1.5rem; text-align:right;">
+        <button type="button" class="primary" id="next-1" disabled onclick="goStep(2)">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 2: Ghidra initialization -->
+    <div id="step-2" class="setup-step" hidden>
+      <div class="setup-step-title">Initialize Ghidra</div>
+      <div class="setup-step-desc">Set up the Ghidra analysis engine. This may take a minute.</div>
+
+      <div style="margin-top:1rem;">
+        <button type="button" class="primary" id="init-ghidra-btn" onclick="initGhidra()">Initialize Ghidra</button>
+        <span id="ghidra-phase" class="setup-phase-text"></span>
+      </div>
+
+      <div class="progress-bar" id="progress-bar" hidden>
+        <div class="progress-fill" id="progress-fill" style="width:0%;"></div>
+      </div>
+
+      <pre class="setup-terminal" id="ghidra-log" hidden></pre>
+
+      <div style="margin-top:1.5rem; text-align:right;">
+        <button type="button" class="primary" id="next-2" disabled onclick="goStep(3)">Next</button>
+      </div>
+    </div>
+
+    <!-- Step 3: Done -->
+    <div id="step-3" class="setup-step" hidden>
+      <div class="setup-step-title">Setup Complete</div>
+      <div class="setup-step-desc">Everything is configured and ready to go.</div>
+
+      <div class="setup-done-summary">
+        <div class="setup-done-row">
+          <span class="setup-done-check">OK</span> API key configured
+        </div>
+        <div class="setup-done-row">
+          <span class="setup-done-check">OK</span> Ghidra analysis engine initialized
+        </div>
+      </div>
+
+      <div style="margin-top:2rem; text-align:center;">
+        <button type="button" class="primary" onclick="completeSetup()">Enter Daywater</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script type="module">
+    import { api } from './shared/api.js';
+
+    // Expose helpers to inline onclick handlers
+    let currentStep = 1;
+
+    // ── Step navigation ──────────────────────────────────────────────── //
+
+    window.goStep = function goStep(n) {
+      document.getElementById(`step-${currentStep}`).hidden = true;
+      document.getElementById(`step-${n}`).hidden = false;
+      currentStep = n;
+      updateDots();
+    };
+
+    function updateDots() {
+      document.querySelectorAll('.setup-step-dot').forEach(dot => {
+        const s = Number(dot.dataset.step);
+        dot.classList.toggle('active', s === currentStep);
+        dot.classList.toggle('done', s < currentStep);
+      });
+    }
+
+    // ── Step 1: API key ──────────────────────────────────────────────── //
+
+    window.toggleKeyVisibility = function toggleKeyVisibility() {
+      const inp = document.getElementById('api-key');
+      const btn = document.getElementById('key-vis-btn');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        btn.textContent = 'hide';
+      } else {
+        inp.type = 'password';
+        btn.textContent = 'show';
+      }
+    };
+
+    window.testConnection = async function testConnection() {
+      const keyVal = document.getElementById('api-key').value.trim();
+      const modelVal = document.getElementById('model').value.trim();
+      const result = document.getElementById('test-result');
+      const nextBtn = document.getElementById('next-1');
+
+      if (!keyVal) {
+        result.hidden = false;
+        result.className = 'setup-test-result error';
+        result.textContent = 'Please enter an API key.';
+        return;
+      }
+
+      result.hidden = false;
+      result.className = 'setup-test-result pending';
+      result.textContent = 'Testing...';
+
+      try {
+        await api('POST', '/api/setup/test-key', {
+          openai_api_key: keyVal,
+          model: modelVal || 'openai/gpt-5.5',
+        });
+
+        // Save settings on success
+        await api('POST', '/api/settings', {
+          openai_api_key: keyVal,
+          model: modelVal || 'openai/gpt-5.5',
+        });
+
+        result.className = 'setup-test-result ok';
+        result.textContent = 'Connection OK — key saved.';
+        nextBtn.disabled = false;
+      } catch (err) {
+        result.className = 'setup-test-result error';
+        result.textContent = 'Error: ' + err.message;
+        nextBtn.disabled = true;
+      }
+    };
+
+    // ── Step 2: Ghidra init ──────────────────────────────────────────── //
+
+    window.initGhidra = async function initGhidra() {
+      const btn = document.getElementById('init-ghidra-btn');
+      const logEl = document.getElementById('ghidra-log');
+      const bar = document.getElementById('progress-bar');
+      const fill = document.getElementById('progress-fill');
+      const phase = document.getElementById('ghidra-phase');
+      const nextBtn = document.getElementById('next-2');
+
+      btn.disabled = true;
+      logEl.hidden = false;
+      bar.hidden = false;
+      logEl.textContent = '';
+      fill.style.width = '0%';
+      phase.textContent = 'Starting...';
+
+      try {
+        await api('POST', '/api/setup/init-ghidra');
+      } catch (err) {
+        logEl.textContent += 'Failed to start Ghidra init: ' + err.message + '\n';
+        btn.disabled = false;
+        phase.textContent = 'Failed';
+        return;
+      }
+
+      // Stream logs via SSE
+      const es = new EventSource('/api/setup/init-ghidra/events');
+
+      es.addEventListener('log', (e) => {
+        logEl.textContent += e.data + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      });
+
+      es.addEventListener('progress', (e) => {
+        const pct = Number(e.data);
+        fill.style.width = pct + '%';
+      });
+
+      es.addEventListener('phase', (e) => {
+        phase.textContent = e.data;
+      });
+
+      es.addEventListener('done', () => {
+        es.close();
+        phase.textContent = 'Complete';
+        fill.style.width = '100%';
+        nextBtn.disabled = false;
+      });
+
+      es.addEventListener('error', (e) => {
+        // SSE error can be a real failure or just stream end
+        if (es.readyState === EventSource.CLOSED) return;
+        logEl.textContent += '\n[connection lost]\n';
+        es.close();
+        btn.disabled = false;
+        phase.textContent = 'Error';
+      });
+    };
+
+    // ── Step 3: Complete ─────────────────────────────────────────────── //
+
+    window.completeSetup = async function completeSetup() {
+      try {
+        await api('POST', '/api/setup/complete');
+      } catch {
+        // best-effort
+      }
+      window.location.href = '/index.html';
+    };
+
+    // ── Init ─────────────────────────────────────────────────────────── //
+    updateDots();
+  </script>
+</body>
+</html>

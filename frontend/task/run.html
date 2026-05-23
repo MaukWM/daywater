@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daywater — Task</title>
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body>
+  <div class="task-page" style="display:flex;">
+    <div class="proj-topbar">
+      <nav class="breadcrumb" id="breadcrumb"></nav>
+      <div class="proj-info-row" id="proj-identity"></div>
+    </div>
+    <div class="task-page-body">
+
+      <!-- Step 1: Select Savestate -->
+      <div class="step locked" id="step-savestate">
+        <div class="step-header">
+          <span class="step-num" id="step-savestate-num">01</span>
+          <h2>Select Savestate</h2>
+          <span class="step-status" id="step-savestate-status"></span>
+        </div>
+        <div class="step-body">
+          <p class="hint">Choose a savestate to use for this task.</p>
+          <div class="config-row" style="align-items:center;">
+            <select id="savestate-select" style="min-width:260px;">
+              <option value="">-- select savestate --</option>
+            </select>
+            <button id="select-savestate-btn" disabled>Select</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Reference Frame -->
+      <div class="step locked" id="step-reference">
+        <div class="step-header">
+          <span class="step-num" id="step-reference-num">02</span>
+          <h2>Reference Frame</h2>
+          <span class="step-status" id="step-reference-status"></span>
+        </div>
+        <div class="step-body">
+          <p class="hint">Capture a reference frame from the selected savestate.</p>
+          <div class="btn-group">
+            <button id="capture-btn" class="primary">Capture from Savestate</button>
+          </div>
+          <div class="spinner" id="capture-spinner" hidden>Capturing reference frame...</div>
+          <div id="reference-preview" style="margin-top:0.75rem;" hidden>
+            <img id="reference-img" style="max-width:640px; width:100%; border:1px solid var(--border);" alt="Reference frame">
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: Paint HUD Mask -->
+      <div class="step locked" id="step-mask">
+        <div class="step-header">
+          <span class="step-num" id="step-mask-num">03</span>
+          <h2>Paint HUD Mask</h2>
+          <span class="step-status" id="step-mask-status"></span>
+        </div>
+        <div class="step-body">
+          <p class="hint">Paint over HUD elements that should be ignored during pixel comparison.</p>
+          <div class="mask-toolbar">
+            <button class="tool-btn active" data-tool="brush" onclick="window._setTool('brush')">Brush</button>
+            <button class="tool-btn" data-tool="eraser" onclick="window._setTool('eraser')">Eraser</button>
+            <label>Size <input type="range" id="brush-size" min="1" max="80" value="20" oninput="window._onBrushSize(this.value)"><span id="brush-size-val">20</span></label>
+            <span class="spacer"></span>
+            <button class="zoom-btn active" data-zoom="1" onclick="window._setZoomLevel('1')">1x</button>
+            <button class="zoom-btn" data-zoom="2" onclick="window._setZoomLevel('2')">2x</button>
+            <button class="zoom-btn" data-zoom="3" onclick="window._setZoomLevel('3')">3x</button>
+            <span class="spacer"></span>
+            <button onclick="window._clearMask()">Clear</button>
+          </div>
+          <div id="canvas-container">
+            <canvas id="mask-canvas" width="640" height="480"></canvas>
+          </div>
+          <button id="submit-mask-btn" class="primary">Submit Mask</button>
+          <div class="spinner" id="mask-spinner" hidden>Uploading mask...</div>
+        </div>
+      </div>
+
+      <!-- Step 4: Run Agent -->
+      <div class="step locked" id="step-run">
+        <div class="step-header">
+          <span class="step-num" id="step-run-num">04</span>
+          <h2>Run Agent</h2>
+          <span class="step-status" id="step-run-status"></span>
+        </div>
+        <div class="step-body">
+          <div class="config-panel">
+            <label>Agent Prompt
+              <span class="field-hint">Describe the objective for the agent.</span>
+            </label>
+            <textarea id="agent-prompt" rows="4" style="width:100%;"></textarea>
+            <div class="config-row" id="run-seconds-row">
+              <label>Run seconds
+                <input type="number" id="run-seconds" value="60" min="10" max="600" style="width:90px;">
+              </label>
+            </div>
+          </div>
+          <div class="btn-group">
+            <button id="start-run-btn" class="primary">Start Agent Run</button>
+          </div>
+          <div class="spinner" id="run-spinner" hidden>Agent running...</div>
+          <div id="event-log" hidden>
+            <h3>Event Log</h3>
+            <pre id="event-log-content"></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 5: Results -->
+      <div class="step locked" id="step-results">
+        <div class="step-header">
+          <span class="step-num" id="step-results-num">05</span>
+          <h2>Results</h2>
+          <span class="step-status" id="step-results-status"></span>
+        </div>
+        <div class="step-body">
+          <div id="verdict-display"></div>
+          <div id="result-gecko" hidden></div>
+          <div class="btn-group" id="result-actions" hidden>
+            <a id="download-gecko-btn" style="display:inline-block; padding:0.4rem 1rem; border:1px solid var(--green-dim); color:var(--green); font-size:0.85rem;">Download Gecko Code</a>
+            <a id="inspect-link" href="#" target="_blank">Open in Inspect</a>
+          </div>
+          <div id="result-frame-container" hidden>
+            <h3>Result Frame</h3>
+            <img id="result-frame" alt="Result frame">
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/task/mask-painter.js"></script>
+  <script type="module">
+    import { api, param, inspectUrl } from '../shared/api.js';
+    import { renderLayout, breadcrumb } from '../shared/layout.js';
+
+    renderLayout();
+
+    const P = param('p');
+    const T = param('t');
+    const BASE = `/api/projects/${P}`;
+    const TBASE = `${BASE}/tasks/${T}`;
+
+    // ── State ──────────────────────────────────────────────────────────── //
+
+    let task = null;
+    let project = null;
+    let pollTimer = null;
+    let frozen = false;
+
+    // Step elements
+    const steps = {
+      savestate: document.getElementById('step-savestate'),
+      reference: document.getElementById('step-reference'),
+      mask:      document.getElementById('step-mask'),
+      run:       document.getElementById('step-run'),
+      results:   document.getElementById('step-results'),
+    };
+
+    // ── Task type detection ────────────────────────────────────────────── //
+
+    function taskType(t) {
+      const spec = t.job_spec || {};
+      const caps = new Set(spec.capabilities || []);
+      const evaluation = spec.evaluation || 'manual_review';
+      // Visual: has pixel_diff_mask evaluation
+      if (evaluation === 'pixel_diff_mask') return 'visual';
+      // Runtime: needs savestate (any runtime capability)
+      if (caps.has('gecko_injection') || caps.has('ram_poke') || caps.has('input_injection') || caps.has('frame_capture') || t.savestate_id) return 'runtime';
+      // Static: no savestate, no mask
+      return 'static';
+    }
+
+    function applicableSteps(type) {
+      if (type === 'visual')  return ['savestate', 'reference', 'mask', 'run', 'results'];
+      if (type === 'runtime') return ['savestate', 'run', 'results'];
+      return ['run', 'results'];
+    }
+
+    // ── Step state machine ─────────────────────────────────────────────── //
+
+    function setStepState(stepEl, state) {
+      stepEl.classList.remove('locked', 'active', 'completed');
+      if (state === 'locked')    stepEl.classList.add('locked');
+      if (state === 'completed') stepEl.classList.add('completed');
+      if (state === 'active')    stepEl.classList.add('active');
+    }
+
+    function updateStepNumbers(visibleKeys) {
+      visibleKeys.forEach((key, i) => {
+        const numEl = document.getElementById(`step-${key}-num`);
+        if (numEl) numEl.textContent = String(i + 1).padStart(2, '0');
+      });
+    }
+
+    function hideInapplicableSteps(visibleKeys) {
+      const allKeys = ['savestate', 'reference', 'mask', 'run', 'results'];
+      for (const key of allKeys) {
+        if (!visibleKeys.includes(key)) {
+          steps[key].style.display = 'none';
+        } else {
+          steps[key].style.display = '';
+        }
+      }
+    }
+
+    function freezeAllInputs() {
+      frozen = true;
+      document.querySelectorAll('.task-page-body button').forEach(b => b.disabled = true);
+      document.querySelectorAll('.task-page-body select, .task-page-body input, .task-page-body textarea')
+        .forEach(el => el.disabled = true);
+    }
+
+    function applyState(visibleKeys, state) {
+      // Map task state -> which steps completed/active
+      const stateOrder = {
+        'created':             0,
+        'savestate_uploaded':  1,
+        'frame_ready':         2,
+        'mask_ready':          3,
+        'ready':               3.5,
+        'running':             4,
+        'done':                5,
+        'failed':              5,
+      };
+
+      const level = stateOrder[state] ?? 0;
+
+      // Map step keys to their "completion threshold"
+      const stepThresholds = {
+        savestate: 1,
+        reference: 2,
+        mask:      3,
+        run:       4,
+        results:   5,
+      };
+
+      for (let i = 0; i < visibleKeys.length; i++) {
+        const key = visibleKeys[i];
+        const threshold = stepThresholds[key];
+        const stepEl = steps[key];
+
+        if (level >= threshold) {
+          setStepState(stepEl, 'completed');
+          const statusEl = document.getElementById(`step-${key}-status`);
+          if (statusEl) statusEl.textContent = 'Done';
+        } else if (i === 0 && level < stepThresholds[visibleKeys[0]]) {
+          // First visible step, not yet completed
+          setStepState(stepEl, 'active');
+        } else {
+          // Check if previous visible step is completed
+          const prevKey = visibleKeys[i - 1];
+          const prevThreshold = stepThresholds[prevKey];
+          if (level >= prevThreshold) {
+            setStepState(stepEl, 'active');
+          } else {
+            setStepState(stepEl, 'locked');
+          }
+        }
+      }
+
+      // Special cases
+      if (state === 'running') {
+        setStepState(steps.run, 'active');
+        const statusEl = document.getElementById('step-run-status');
+        if (statusEl) statusEl.textContent = 'Running...';
+        startPolling();
+      }
+
+      if (state === 'done' || state === 'failed') {
+        setStepState(steps.results, 'active');
+        loadResults();
+        freezeAllInputs();
+      }
+    }
+
+    // ── Load project + task ────────────────────────────────────────────── //
+
+    async function init() {
+      try {
+        [project, task] = await Promise.all([
+          api('GET', `${BASE}`),
+          api('GET', TBASE),
+        ]);
+      } catch (e) {
+        document.querySelector('.task-page-body').innerHTML =
+          `<div class="empty-state">Failed to load task: ${e.message}</div>`;
+        return;
+      }
+
+      // Breadcrumb
+      breadcrumb(document.getElementById('breadcrumb'), [
+        { text: 'Projects', href: '/index.html' },
+        { text: project.game_id || project.name || 'Project', href: `/project.html?id=${P}` },
+        { text: task.name || 'Task' },
+      ]);
+
+      // Project identity
+      document.getElementById('proj-identity').innerHTML = `
+        <span class="proj-game-id">${project.game_id || ''}</span>
+        <span class="proj-meta">${task.name || 'Untitled Task'}</span>
+        <span class="proj-tag ${task.state === 'done' ? 'green' : 'amber'}">${task.state}</span>
+      `;
+
+      // Determine task type and visible steps
+      const type = taskType(task);
+      const visible = applicableSteps(type);
+
+      hideInapplicableSteps(visible);
+      updateStepNumbers(visible);
+
+      // Hide run_seconds for non-runtime types (static tasks)
+      if (type === 'static') {
+        document.getElementById('run-seconds-row').hidden = true;
+      }
+
+      // Pre-fill agent prompt
+      if (task.target_description) {
+        document.getElementById('agent-prompt').value = task.target_description;
+      }
+
+      // Apply current state
+      applyState(visible, task.state);
+
+      // Load savestates if applicable
+      if (visible.includes('savestate')) {
+        loadSavestates();
+      }
+
+      // If frame_ready or later and visual, show reference image
+      if (visible.includes('reference') && stateLevel(task.state) >= 2) {
+        showReferencePreview();
+      }
+
+      // If mask step visible and frame_ready, init mask painter
+      if (visible.includes('mask') && stateLevel(task.state) >= 2) {
+        initMaskStep();
+      }
+
+      // If mask already submitted, load it as read-only
+      if (visible.includes('mask') && stateLevel(task.state) >= 3) {
+        loadExistingMask();
+      }
+
+      // If running, start poll
+      if (task.state === 'running') {
+        showRunningUI();
+        startPolling();
+      }
+    }
+
+    function stateLevel(state) {
+      const map = { created: 0, savestate_uploaded: 1, frame_ready: 2, mask_ready: 3, ready: 3.5, running: 4, done: 5, failed: 5 };
+      return map[state] ?? 0;
+    }
+
+    // ── Step 1: Savestates ─────────────────────────────────────────────── //
+
+    async function loadSavestates() {
+      try {
+        const savestates = await api('GET', `${BASE}/savestates`);
+        const sel = document.getElementById('savestate-select');
+        sel.innerHTML = '<option value="">-- select savestate --</option>';
+        for (const ss of savestates) {
+          const opt = document.createElement('option');
+          opt.value = ss.savestate_id;
+          let label = ss.name || ss.savestate_id;
+          if (ss.notes) label += ` — ${ss.notes.slice(0, 40)}`;
+          opt.textContent = label;
+          if (task.savestate_id && ss.savestate_id === task.savestate_id) {
+            opt.selected = true;
+          }
+          sel.appendChild(opt);
+        }
+        document.getElementById('select-savestate-btn').disabled = !sel.value;
+      } catch (e) {
+        console.error('savestates_load_failed', e);
+      }
+    }
+
+    document.getElementById('savestate-select').addEventListener('change', (e) => {
+      document.getElementById('select-savestate-btn').disabled = !e.target.value;
+    });
+
+    document.getElementById('select-savestate-btn').addEventListener('click', async () => {
+      const ssId = document.getElementById('savestate-select').value;
+      if (!ssId) return;
+      const btn = document.getElementById('select-savestate-btn');
+      btn.disabled = true;
+      try {
+        await api('POST', `${TBASE}/select-savestate`, { savestate_id: ssId });
+        task = await api('GET', TBASE);
+        const visible = applicableSteps(taskType(task));
+        applyState(visible, task.state);
+        document.getElementById('step-savestate-status').textContent = 'Done';
+      } catch (e) {
+        alert('Failed to select savestate: ' + e.message);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // ── Step 2: Reference Frame ────────────────────────────────────────── //
+
+    function showReferencePreview() {
+      const preview = document.getElementById('reference-preview');
+      const img = document.getElementById('reference-img');
+      img.src = `${TBASE}/files/reference.png?_=${Date.now()}`;
+      preview.hidden = false;
+    }
+
+    document.getElementById('capture-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('capture-btn');
+      const spinner = document.getElementById('capture-spinner');
+      btn.disabled = true;
+      spinner.hidden = false;
+      try {
+        await api('POST', `${TBASE}/capture`);
+        task = await api('GET', TBASE);
+        showReferencePreview();
+        const visible = applicableSteps(taskType(task));
+        applyState(visible, task.state);
+        if (visible.includes('mask')) {
+          initMaskStep();
+        }
+      } catch (e) {
+        alert('Capture failed: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        spinner.hidden = true;
+      }
+    });
+
+    // ── Step 3: Mask Painter ───────────────────────────────────────────── //
+
+    function initMaskStep() {
+      const refUrl = `${TBASE}/files/reference.png?_=${Date.now()}`;
+      if (typeof window.initMaskPainter === 'function') {
+        window.initMaskPainter(refUrl);
+      }
+    }
+
+    function loadExistingMask() {
+      const maskUrl = `${TBASE}/files/mask.png?_=${Date.now()}`;
+      if (typeof window.loadMaskFromUrl === 'function') {
+        window.loadMaskFromUrl(maskUrl);
+      }
+      if (typeof window.setMaskReadOnly === 'function' && stateLevel(task.state) >= 4) {
+        window.setMaskReadOnly(true);
+      }
+    }
+
+    // Toolbar wiring
+    window._setTool = (t) => {
+      document.querySelectorAll('.tool-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tool === t);
+      });
+      if (typeof window.setTool === 'function') window.setTool(t);
+    };
+
+    window._onBrushSize = (val) => {
+      document.getElementById('brush-size-val').textContent = val;
+      if (typeof window.updateBrushSize === 'function') window.updateBrushSize(parseInt(val));
+    };
+
+    window._setZoomLevel = (z) => {
+      document.querySelectorAll('.zoom-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.zoom === z);
+      });
+      if (typeof window.setZoom === 'function') window.setZoom(parseFloat(z));
+    };
+
+    window._clearMask = () => {
+      if (typeof window.maskClear === 'function') window.maskClear();
+    };
+
+    document.getElementById('submit-mask-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('submit-mask-btn');
+      const spinner = document.getElementById('mask-spinner');
+      btn.disabled = true;
+      spinner.hidden = false;
+      try {
+        let blob;
+        if (typeof window.exportMask === 'function') {
+          blob = await window.exportMask();
+        } else {
+          // Fallback: export directly from canvas
+          const canvas = document.getElementById('mask-canvas');
+          blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        }
+        const fd = new FormData();
+        fd.append('file', blob, 'mask.png');
+        await api('POST', `${TBASE}/mask`, fd, true);
+        task = await api('GET', TBASE);
+        const visible = applicableSteps(taskType(task));
+        applyState(visible, task.state);
+      } catch (e) {
+        alert('Mask upload failed: ' + e.message);
+      } finally {
+        btn.disabled = false;
+        spinner.hidden = true;
+      }
+    });
+
+    // ── Step 4: Run Agent ──────────────────────────────────────────────── //
+
+    function showRunningUI() {
+      document.getElementById('start-run-btn').disabled = true;
+      document.getElementById('run-spinner').hidden = false;
+      document.getElementById('event-log').hidden = false;
+    }
+
+    document.getElementById('start-run-btn').addEventListener('click', async () => {
+      const btn = document.getElementById('start-run-btn');
+      btn.disabled = true;
+
+      const prompt = document.getElementById('agent-prompt').value.trim();
+      const runSeconds = parseInt(document.getElementById('run-seconds').value) || 60;
+
+      const body = { prompt };
+      if (!document.getElementById('run-seconds-row').hidden) {
+        body.run_seconds = runSeconds;
+      }
+
+      try {
+        await api('POST', `${TBASE}/run`, body);
+        task = await api('GET', TBASE);
+        showRunningUI();
+        const visible = applicableSteps(taskType(task));
+        applyState(visible, task.state);
+        startPolling();
+      } catch (e) {
+        alert('Failed to start agent: ' + e.message);
+        btn.disabled = false;
+      }
+    });
+
+    function startPolling() {
+      if (pollTimer) return;
+      const logEl = document.getElementById('event-log-content');
+      document.getElementById('event-log').hidden = false;
+
+      pollTimer = setInterval(async () => {
+        try {
+          task = await api('GET', TBASE);
+
+          // Append status info to log
+          const ts = new Date().toLocaleTimeString();
+          logEl.textContent += `[${ts}] state=${task.state}`;
+          if (task.status_message) logEl.textContent += ` — ${task.status_message}`;
+          logEl.textContent += '\n';
+          logEl.scrollTop = logEl.scrollHeight;
+
+          if (task.state === 'done' || task.state === 'failed') {
+            clearInterval(pollTimer);
+            pollTimer = null;
+            document.getElementById('run-spinner').hidden = true;
+            document.getElementById('step-run-status').textContent = 'Done';
+            setStepState(steps.run, 'completed');
+            setStepState(steps.results, 'active');
+            loadResults();
+            freezeAllInputs();
+          }
+        } catch (e) {
+          console.error('poll_failed', e);
+        }
+      }, 3000);
+    }
+
+    // ── Step 5: Results ────────────────────────────────────────────────── //
+
+    async function loadResults() {
+      try {
+        const result = await api('GET', `${TBASE}/result`);
+
+        // Verdict
+        const verdictEl = document.getElementById('verdict-display');
+        const isPass = result.verdict === 'PASS';
+        verdictEl.innerHTML = `<div class="verdict ${isPass ? 'pass' : 'fail'}">${result.verdict || 'UNKNOWN'}</div>`;
+        if (result.accuracy !== undefined && result.accuracy !== null) {
+          verdictEl.innerHTML += `<div style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.75rem;">Accuracy: ${(result.accuracy * 100).toFixed(1)}%</div>`;
+        }
+
+        // Gecko code
+        if (result.gecko) {
+          const geckoEl = document.getElementById('result-gecko');
+          geckoEl.textContent = result.gecko;
+          geckoEl.hidden = false;
+        }
+
+        // Actions
+        const actionsEl = document.getElementById('result-actions');
+        actionsEl.hidden = false;
+        document.getElementById('download-gecko-btn').href = `${TBASE}/result.gecko`;
+        document.getElementById('download-gecko-btn').download = 'result.gecko';
+        document.getElementById('inspect-link').href = inspectUrl;
+
+        // Result frame
+        if (result.has_frame) {
+          const frameContainer = document.getElementById('result-frame-container');
+          frameContainer.hidden = false;
+          document.getElementById('result-frame').src = `${TBASE}/files/result_frame.png?_=${Date.now()}`;
+        }
+      } catch (e) {
+        document.getElementById('verdict-display').innerHTML =
+          `<div class="verdict fail">Error loading results: ${e.message}</div>`;
+      }
+    }
+
+    // ── Init ───────────────────────────────────────────────────────────── //
+
+    await init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAYWATER — Project</title>
+  <link rel="stylesheet" href="/shared/style.css">
+</head>
+<body>
+
+<div class="proj-page" style="display:flex; flex-direction:column; height:100vh;">
+  <div class="proj-topbar">
+    <nav class="breadcrumb" id="proj-breadcrumb"></nav>
+    <div class="proj-info-row" id="project-info"></div>
+    <div id="project-survey-status" class="proj-survey" hidden></div>
+  </div>
+  <div class="proj-columns">
+    <div class="proj-left">
+      <!-- Savestates -->
+      <div class="proj-panel-header">
+        <h2>Savestates</h2>
+      </div>
+      <div class="proj-panel-body">
+        <ul class="savestate-list" id="savestate-list"></ul>
+        <div id="no-savestates" class="empty-state-sm">
+          No savestates yet. Upload one below.
+        </div>
+
+        <!-- Savestate detail -->
+        <div id="savestate-detail" class="ss-detail" hidden>
+          <div class="ss-detail-top">
+            <div class="ss-detail-meta">
+              <div class="row"><span class="label">Name</span><input type="text" id="ss-detail-name" style="width:100%;" /></div>
+              <div class="row" style="align-items:start;"><span class="label">Notes</span><textarea id="ss-detail-notes" rows="3" style="width:100%;"></textarea></div>
+              <button id="ss-save-notes-btn" style="margin-top:0.5rem;">Save Notes</button>
+            </div>
+            <div class="ss-detail-screenshot">
+              <img id="ss-detail-screenshot" style="max-width:280px; max-height:210px; border:1px solid var(--border); display:none;" />
+              <button id="ss-screenshot-btn">Render Screenshot</button>
+              <div id="ss-screenshot-spinner" class="spinner" hidden>booting dolphin...</div>
+            </div>
+          </div>
+          <span id="ss-detail-id" hidden></span>
+
+          <div id="ss-findings-section" style="margin-top:0.75rem;" hidden>
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.4rem;">
+              <h3 style="font-size:0.78rem; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.06em; margin:0;">Findings</h3>
+              <button class="danger" style="padding:0.1rem 0.4rem; font-size:0.65rem;" id="ss-clear-findings-btn">Clear All</button>
+            </div>
+            <table class="kb-table" id="ss-findings-table"></table>
+          </div>
+          <div id="ss-no-findings" style="margin-top:0.5rem; color:var(--text-dim); font-size:0.78rem;">No findings for this savestate.</div>
+        </div>
+
+        <div class="ss-upload">
+          <p class="hint" style="margin-bottom:0.4rem;">Savestates must be from <a href="https://dolphin-emu.org/download/release/2603a/" target="_blank">Dolphin 2603a</a> — other versions will not work.</p>
+          <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+            <input type="file" id="savestate-file-input" accept=".s01,.s02,.s03,.s04,.s05,.s06,.s07,.s08,.sav" style="display:none;" />
+            <button type="button" class="file-btn" id="ss-choose-file-btn">Choose file</button>
+            <span id="savestate-filename" class="file-btn-name">No file selected</span>
+            <button id="ss-upload-btn">Upload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Tasks + Controller Mapping + KB + Disc -->
+    <div class="proj-right">
+      <div class="proj-panel-header">
+        <h2>Tasks</h2>
+        <button id="new-task-btn">+ New Task</button>
+      </div>
+
+      <div class="proj-panel-body">
+        <ul class="task-list" id="task-list"></ul>
+        <div id="no-tasks" class="empty-state-sm" hidden>
+          No tasks yet.
+        </div>
+
+        <!-- Controller Mapping (collapsible) -->
+        <div class="proj-section">
+          <div class="proj-section-header" id="ctrl-map-toggle">
+            <h2>Controller Mapping</h2>
+            <span class="toggle-icon" id="ctrl-map-content-icon">+</span>
+          </div>
+          <div id="ctrl-map-content" class="proj-section-body" hidden>
+            <p class="hint" style="margin-bottom:0.5rem;">What each GC input does in this game. Used by runtime tasks.</p>
+            <div class="ctrl-map-grid" id="ctrl-map-grid"></div>
+            <button id="ctrl-map-save-btn" style="margin-top:0.5rem;">Save Mapping</button>
+          </div>
+        </div>
+
+        <!-- Knowledge Base -->
+        <div class="proj-section">
+          <div class="proj-section-header">
+            <h2>Knowledge Base</h2>
+            <button id="kb-open-btn" style="padding:0.2rem 0.6rem; font-size:0.75rem;">Open</button>
+          </div>
+          <div id="kb-summary" style="padding:0.4rem 0; font-size:0.8rem; color:var(--text-dim);"></div>
+        </div>
+
+        <!-- Disc Contents (always visible) -->
+        <div class="proj-section">
+          <div class="proj-section-header">
+            <h2>Disc Contents</h2>
+          </div>
+          <div id="disc-contents" class="proj-section-body">
+            <div id="disc-summary" style="font-size:0.78rem; color:var(--text-dim); margin-bottom:0.6rem;"></div>
+            <div id="disc-tree" class="dc-tree"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { api, timeAgo, formatFileSize, param } from './shared/api.js';
+import { renderLayout, breadcrumb } from './shared/layout.js';
+
+// ── State ──────────────────────────────────────────────────────────── //
+
+const projectId = param('id');
+if (!projectId) { location.href = '/index.html'; }
+
+let currentSavestateId = null;
+let surveyES = null;
+let discContentsLoaded = false;
+
+const GC_BUTTONS = ['A','B','X','Y','Z','L','R','START','D_UP','D_DOWN','D_LEFT','D_RIGHT'];
+const GC_STICKS = ['MAIN','C'];
+const STICK_DIRS = ['up','down','left','right'];
+
+// ── Init ───────────────────────────────────────────────────────────── //
+
+renderLayout();
+loadProject();
+
+// ── Project loader ─────────────────────────────────────────────────── //
+
+async function loadProject() {
+  discContentsLoaded = false;
+
+  // Close any prior SSE stream
+  if (surveyES) { surveyES.close(); surveyES = null; }
+  const surveyEl = document.getElementById('project-survey-status');
+  surveyEl.hidden = true;
+  surveyEl.innerHTML = '';
+
+  // Clear stale disc tree
+  document.getElementById('disc-tree').innerHTML = '';
+
+  // Temporary breadcrumb while loading
+  breadcrumb(document.getElementById('proj-breadcrumb'), [
+    { text: 'Projects', href: '/index.html' },
+    { text: '...' },
+  ]);
+
+  try {
+    const p = await api('GET', `/api/projects/${projectId}`);
+
+    const displayName = p.name || p.game_id || projectId;
+
+    // Update breadcrumb with real name
+    breadcrumb(document.getElementById('proj-breadcrumb'), [
+      { text: 'Projects', href: '/index.html' },
+      { text: displayName },
+    ]);
+
+    // Update page title
+    document.title = `DAYWATER — ${displayName}`;
+
+    // Project info row
+    const info = document.getElementById('project-info');
+    const surveyText = p.survey_complete
+      ? `<span class="proj-tag green">${p.survey_binaries_done} binaries</span>`
+      : `<span class="proj-tag amber">analyzing ${p.survey_binaries_done || 0}/${p.survey_binaries_total || '?'}</span>`;
+
+    info.innerHTML = `
+      <span class="proj-game-id proj-name-editable" id="proj-name-display" title="Click to rename">${displayName}</span>
+      <span class="proj-meta">${p.game_id}</span>
+      <span class="proj-meta">${p.iso_sha1 ? p.iso_sha1.slice(0, 12) : ''}</span>
+      <span class="proj-meta">${p.iso_size ? formatFileSize(p.iso_size) : ''}</span>
+      ${surveyText}
+    `;
+
+    // Wire up inline rename
+    document.getElementById('proj-name-display').addEventListener('click', (e) => editProjectName(e.target));
+
+    // Poll survey if not complete
+    if (!p.survey_complete) {
+      pollProjectSurvey();
+    }
+
+    // Load sub-sections in parallel
+    loadSavestates();
+    loadDiscContents();
+    loadControllerMapping();
+    loadTasks();
+    loadKbSummary();
+
+  } catch (e) {
+    console.error('Failed to load project:', e);
+    document.getElementById('project-info').innerHTML =
+      `<span style="color:var(--red);">Failed to load project: ${e.message}</span>`;
+  }
+}
+
+// ── Tasks ──────────────────────────────────────────────────────────── //
+
+async function loadTasks() {
+  try {
+    const tasks = await api('GET', `/api/projects/${projectId}/tasks`);
+    const list = document.getElementById('task-list');
+    const empty = document.getElementById('no-tasks');
+
+    if (!tasks.length) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+
+    empty.hidden = true;
+    list.innerHTML = tasks.map(t => {
+      const taskName = t.name || (t.preset || t.goal_type || 'task').replace(/_/g, ' ');
+      const stateClass = t.state === 'crashed' ? 'state-crashed'
+        : t.state === 'failed' ? 'state-failed'
+        : t.state === 'done' ? 'state-done' : '';
+      return `<li data-task-id="${t.task_id}">
+        <span class="cursor">&gt;</span>
+        <span class="task-name">${taskName}</span>
+        <span class="task-state ${stateClass}">${t.state}</span>
+        <span class="task-time">${timeAgo(t.created_at)}</span>
+        <button class="danger delete-btn" data-delete-task="${t.task_id}">x</button>
+      </li>`;
+    }).join('');
+
+    // Wire click handlers
+    list.querySelectorAll('li').forEach(li => {
+      li.style.cursor = 'pointer';
+      li.addEventListener('click', (e) => {
+        if (e.target.closest('.delete-btn')) return;
+        const tid = li.dataset.taskId;
+        location.href = `/task/run.html?p=${projectId}&t=${tid}`;
+      });
+    });
+
+    list.querySelectorAll('[data-delete-task]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const tid = btn.dataset.deleteTask;
+        if (!confirm('Delete this task?')) return;
+        try {
+          await api('DELETE', `/api/projects/${projectId}/tasks/${tid}`);
+          loadTasks();
+        } catch (err) { alert('Delete failed: ' + err.message); }
+      });
+    });
+  } catch (e) {
+    console.error('Failed to load tasks:', e);
+  }
+}
+
+// New task button
+document.getElementById('new-task-btn').addEventListener('click', () => {
+  location.href = `/task/new.html?p=${projectId}`;
+});
+
+// ── Savestates ─────────────────────────────────────────────────────── //
+
+async function loadSavestates() {
+  try {
+    const savestates = await api('GET', `/api/projects/${projectId}/savestates`);
+    const list = document.getElementById('savestate-list');
+    const empty = document.getElementById('no-savestates');
+
+    if (!savestates.length) {
+      list.innerHTML = '';
+      empty.hidden = false;
+      return;
+    }
+
+    empty.hidden = true;
+    list.innerHTML = savestates.map(s => {
+      const name = s.name || s.savestate_id;
+      const notes = s.notes ? ` — ${s.notes.slice(0, 60)}` : '';
+      const findingsTag = s.findings_count
+        ? `<span class="status-tag ready">${s.findings_count} findings</span>`
+        : '';
+      const thumb = s.has_screenshot
+        ? `<img class="ss-thumb" src="/api/projects/${projectId}/savestates/${s.savestate_id}/screenshot" alt="">`
+        : '';
+      return `<li data-ss-id="${s.savestate_id}" style="cursor:pointer;">
+        <span class="cursor">&gt;</span>
+        <span class="task-type">${name}</span>
+        <span class="meta">${timeAgo(s.created_at)}${notes}</span>
+        ${findingsTag}
+        ${thumb}
+        <button class="danger delete-btn" data-delete-ss="${s.savestate_id}">x</button>
+      </li>`;
+    }).join('');
+
+    // Wire click handlers
+    list.querySelectorAll('li').forEach(li => {
+      li.addEventListener('click', (e) => {
+        if (e.target.closest('.delete-btn')) return;
+        expandSavestate(li.dataset.ssId);
+      });
+    });
+
+    list.querySelectorAll('[data-delete-ss]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const ssId = btn.dataset.deleteSs;
+        if (!confirm('Delete this savestate?')) return;
+        try {
+          await api('DELETE', `/api/projects/${projectId}/savestates/${ssId}`);
+          if (currentSavestateId === ssId) collapseSavestate();
+          loadSavestates();
+        } catch (err) { alert('Delete failed: ' + err.message); }
+      });
+    });
+  } catch (e) {
+    console.error('Failed to load savestates:', e);
+  }
+}
+
+function collapseSavestate() {
+  currentSavestateId = null;
+  document.getElementById('savestate-detail').hidden = true;
+}
+
+async function expandSavestate(ssId) {
+  // Toggle: click same savestate again to close
+  if (currentSavestateId === ssId) {
+    collapseSavestate();
+    return;
+  }
+  currentSavestateId = ssId;
+  const detail = document.getElementById('savestate-detail');
+  detail.hidden = false;
+
+  try {
+    const ss = await api('GET', `/api/projects/${projectId}/savestates/${ssId}`);
+    document.getElementById('ss-detail-id').textContent = ssId;
+    document.getElementById('ss-detail-name').value = ss.name || '';
+    document.getElementById('ss-detail-notes').value = ss.notes || '';
+    const img = document.getElementById('ss-detail-screenshot');
+    if (ss.has_screenshot) {
+      img.src = `/api/projects/${projectId}/savestates/${ssId}/screenshot?t=${Date.now()}`;
+      img.style.display = 'block';
+    } else {
+      img.style.display = 'none';
+    }
+    loadSavestateFindings(ssId);
+  } catch (e) {
+    console.error('Failed to load savestate:', e);
+  }
+}
+
+async function loadSavestateFindings(ssId) {
+  const section = document.getElementById('ss-findings-section');
+  const noFindings = document.getElementById('ss-no-findings');
+  const table = document.getElementById('ss-findings-table');
+
+  try {
+    const findings = await api('GET', `/api/projects/${projectId}/savestates/${ssId}/findings`);
+    if (!findings.length) {
+      section.hidden = true;
+      noFindings.hidden = false;
+      return;
+    }
+    noFindings.hidden = true;
+    section.hidden = false;
+    const kindClass = k => k === 'address' ? 'kb-kind-addr' : k === 'function' ? 'kb-kind-func' : 'kb-kind-note';
+    table.innerHTML =
+      `<tr><th>Kind</th><th>Address</th><th>Label</th><th class="kb-th-detail">Detail</th><th></th></tr>` +
+      findings.map(f => `<tr>
+        <td><span class="kb-kind ${kindClass(f.kind)}">${f.kind}</span></td>
+        <td class="kb-addr">${f.address ? '0x' + f.address : ''}</td>
+        <td class="kb-name">${f.label}</td>
+        <td class="kb-detail">${f.detail}</td>
+        <td><button class="danger" style="padding:0.1rem 0.4rem;font-size:0.7rem" data-delete-finding="${f.id}">x</button></td>
+      </tr>`).join('');
+
+    // Wire finding delete buttons
+    table.querySelectorAll('[data-delete-finding]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this finding?')) return;
+        try {
+          await api('DELETE', `/api/projects/${projectId}/savestates/${ssId}/findings/${btn.dataset.deleteFinding}`);
+          loadSavestateFindings(ssId);
+        } catch (err) { alert('Delete failed: ' + err.message); }
+      });
+    });
+  } catch (e) {
+    console.error('Failed to load savestate findings:', e);
+  }
+}
+
+// Save notes button
+document.getElementById('ss-save-notes-btn').addEventListener('click', async () => {
+  if (!currentSavestateId) return;
+  try {
+    await api('POST', `/api/projects/${projectId}/savestates/${currentSavestateId}/notes`, {
+      name: document.getElementById('ss-detail-name').value.trim(),
+      notes: document.getElementById('ss-detail-notes').value.trim(),
+    });
+    loadSavestates();
+  } catch (e) { alert('Failed to save notes: ' + e.message); }
+});
+
+// Screenshot button
+document.getElementById('ss-screenshot-btn').addEventListener('click', async () => {
+  if (!currentSavestateId) return;
+  const btn = document.getElementById('ss-screenshot-btn');
+  const spinner = document.getElementById('ss-screenshot-spinner');
+  btn.disabled = true;
+  spinner.hidden = false;
+
+  try {
+    await api('POST', `/api/projects/${projectId}/savestates/${currentSavestateId}/render-screenshot`);
+    const img = document.getElementById('ss-detail-screenshot');
+    img.src = `/api/projects/${projectId}/savestates/${currentSavestateId}/screenshot?t=${Date.now()}`;
+    img.style.display = 'block';
+  } catch (e) { alert('Screenshot rendering failed: ' + e.message); }
+  finally {
+    btn.disabled = false;
+    spinner.hidden = true;
+  }
+});
+
+// Clear all findings for current savestate
+document.getElementById('ss-clear-findings-btn').addEventListener('click', async () => {
+  if (!currentSavestateId) return;
+  if (!confirm('Delete ALL findings for this savestate?')) return;
+  try {
+    await api('DELETE', `/api/projects/${projectId}/savestates/${currentSavestateId}/findings`);
+    loadSavestateFindings(currentSavestateId);
+  } catch (e) { alert('Clear failed: ' + e.message); }
+});
+
+// File input display
+const fileInput = document.getElementById('savestate-file-input');
+const filenameSpan = document.getElementById('savestate-filename');
+
+document.getElementById('ss-choose-file-btn').addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', () => {
+  filenameSpan.textContent = fileInput.files.length ? fileInput.files[0].name : 'No file selected';
+});
+
+// Upload savestate
+document.getElementById('ss-upload-btn').addEventListener('click', async () => {
+  if (!fileInput.files.length) return alert('Select a savestate file first');
+
+  const form = new FormData();
+  form.append('file', fileInput.files[0]);
+
+  try {
+    await api('POST', `/api/projects/${projectId}/savestates/upload`, form, true);
+    fileInput.value = '';
+    filenameSpan.textContent = 'No file selected';
+    loadSavestates();
+  } catch (e) { alert('Savestate upload failed: ' + e.message); }
+});
+
+// ── Editable project name ──────────────────────────────────────────── //
+
+function editProjectName(el) {
+  const current = el.textContent;
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = current;
+  input.className = 'proj-name-input';
+  input.style.cssText = 'font-size:1rem; font-weight:600; color:var(--green); background:var(--bg); border:1px solid var(--green-dim); padding:0.2rem 0.4rem; font-family:inherit; width:250px;';
+
+  const save = async () => {
+    const newName = input.value.trim();
+    if (newName && newName !== current) {
+      try {
+        await api('POST', `/api/projects/${projectId}/name`, { name: newName });
+      } catch (e) { console.error('Failed to rename:', e); }
+    }
+    loadProject();
+  };
+
+  input.addEventListener('blur', save);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { loadProject(); }
+  });
+
+  el.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+// ── Survey polling ─────────────────────────────────────────────────── //
+
+function pollProjectSurvey() {
+  const surveyEl = document.getElementById('project-survey-status');
+  surveyEl.hidden = false;
+  surveyEl.innerHTML = `
+    <div style="margin-bottom:0.4rem;">
+      <span class="spinner-inline"></span>
+      <span id="survey-status-text">Ghidra binary analysis starting...</span>
+    </div>
+    <div class="setup-terminal" id="survey-log" style="max-height:200px;">
+      <pre id="survey-log-content"></pre>
+    </div>
+  `;
+
+  // Try SSE first for real-time detail
+  if (surveyES) surveyES.close();
+  surveyES = new EventSource(`/api/projects/${projectId}/events`);
+
+  const statusText = document.getElementById('survey-status-text');
+  const logContent = document.getElementById('survey-log-content');
+  const logEl = document.getElementById('survey-log');
+
+  surveyES.onmessage = (e) => {
+    let evt;
+    try { evt = JSON.parse(e.data); } catch { return; }
+
+    if (evt.t === 'survey_progress') {
+      const pct = evt.total > 0 ? Math.round((evt.done / evt.total) * 100) : 0;
+      statusText.innerHTML = `Analyzing binaries: ${evt.done}/${evt.total} (${pct}%) — ${evt.label}`;
+    }
+
+    if (evt.t === 'survey_detail') {
+      logContent.textContent += evt.msg + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    if (evt.t === 'survey_done') {
+      surveyES.close();
+      surveyES = null;
+      surveyEl.innerHTML = `<span style="color:var(--green);">analysis complete: ${evt.binaries} binaries analyzed</span>`;
+      loadProject();
+    }
+
+    if (evt.t === 'survey_error') {
+      logContent.textContent += '!! ' + evt.error + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  };
+
+  surveyES.onerror = () => {
+    // Fallback: poll via REST if SSE drops
+    if (surveyES) { surveyES.close(); surveyES = null; }
+    setTimeout(async () => {
+      try {
+        const p = await api('GET', `/api/projects/${projectId}`);
+        if (p.survey_complete) { loadProject(); }
+        else { pollProjectSurvey(); }
+      } catch { /* retry later */ }
+    }, 3000);
+  };
+}
+
+// ── Controller Mapping ─────────────────────────────────────────────── //
+
+async function loadControllerMapping() {
+  const grid = document.getElementById('ctrl-map-grid');
+  try {
+    const mapping = await api('GET', `/api/projects/${projectId}/controller-mapping`);
+
+    let html = '';
+
+    // Sticks
+    for (const stick of GC_STICKS) {
+      const s = mapping.sticks[stick] || {};
+      const label = stick === 'MAIN' ? 'Main Stick' : 'C-Stick';
+      html += `<div class="ctrl-section">`;
+      html += `<div class="ctrl-row"><span class="ctrl-label">${label}</span><input type="text" class="ctrl-input" id="ctrl-stick-${stick}-desc" value="${s.description || ''}" placeholder="General description" /></div>`;
+      for (const dir of STICK_DIRS) {
+        html += `<div class="ctrl-row ctrl-sub"><span class="ctrl-label">${dir}</span><input type="text" class="ctrl-input" id="ctrl-stick-${stick}-${dir}" value="${s[dir] || ''}" placeholder="" /></div>`;
+      }
+      html += `</div>`;
+    }
+
+    // Buttons
+    html += `<div class="ctrl-section">`;
+    for (const btn of GC_BUTTONS) {
+      const desc = (mapping.buttons || {})[btn] || '';
+      html += `<div class="ctrl-row"><span class="ctrl-label">${btn}</span><input type="text" class="ctrl-input" id="ctrl-btn-${btn}" value="${desc}" placeholder="" /></div>`;
+    }
+    html += `</div>`;
+
+    grid.innerHTML = html;
+  } catch (e) {
+    console.error('Failed to load controller mapping:', e);
+    grid.innerHTML = '<span style="color:var(--text-dim)">Failed to load mapping</span>';
+  }
+}
+
+async function saveControllerMapping() {
+  const mapping = { buttons: {}, sticks: {} };
+
+  for (const btn of GC_BUTTONS) {
+    const el = document.getElementById(`ctrl-btn-${btn}`);
+    if (el) mapping.buttons[btn] = el.value.trim();
+  }
+
+  for (const stick of GC_STICKS) {
+    mapping.sticks[stick] = {
+      description: (document.getElementById(`ctrl-stick-${stick}-desc`) || {}).value?.trim() || '',
+    };
+    for (const dir of STICK_DIRS) {
+      mapping.sticks[stick][dir] = (document.getElementById(`ctrl-stick-${stick}-${dir}`) || {}).value?.trim() || '';
+    }
+  }
+
+  try {
+    await api('POST', `/api/projects/${projectId}/controller-mapping`, mapping);
+  } catch (e) { alert('Failed to save mapping: ' + e.message); }
+}
+
+// Toggle controller mapping section
+document.getElementById('ctrl-map-toggle').addEventListener('click', () => {
+  const el = document.getElementById('ctrl-map-content');
+  const icon = document.getElementById('ctrl-map-content-icon');
+  if (el.hidden) {
+    el.hidden = false;
+    icon.textContent = '\u2212';
+  } else {
+    el.hidden = true;
+    icon.textContent = '+';
+  }
+});
+
+// Save controller mapping button
+document.getElementById('ctrl-map-save-btn').addEventListener('click', saveControllerMapping);
+
+// ── Knowledge Base summary ─────────────────────────────────────────── //
+
+async function loadKbSummary() {
+  try {
+    const [kb, res, gcc] = await Promise.all([
+      api('GET', `/api/projects/${projectId}/knowledge`),
+      api('GET', `/api/projects/${projectId}/research`),
+      api('GET', `/api/projects/${projectId}/gecko-codes`),
+    ]);
+    const counts = [];
+    if (kb.findings.length) counts.push(`${kb.findings.length} findings`);
+    if (kb.renames.length) counts.push(`${kb.renames.length} renames`);
+    if (res.docs.length) counts.push(`${res.docs.length} research docs`);
+    if (gcc.codes.length) counts.push(`${gcc.codes.length} gecko codes`);
+    document.getElementById('kb-summary').textContent = counts.length
+      ? counts.join(' \u00b7 ')
+      : 'No knowledge yet';
+  } catch {
+    document.getElementById('kb-summary').textContent = '';
+  }
+}
+
+// KB open button
+document.getElementById('kb-open-btn').addEventListener('click', () => {
+  location.href = `/knowledge.html?id=${projectId}`;
+});
+
+// ── Disc Contents ──────────────────────────────────────────────────── //
+
+function buildDiscTree(files) {
+  const root = {};
+  for (const f of files) {
+    const parts = f.path.split('/');
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (i === parts.length - 1) {
+        node[part] = { _type: 'file', _size: f.size, _path: f.path };
+      } else {
+        if (!node[part]) node[part] = { _type: 'dir', _children: {} };
+        node = node[part]._children;
+      }
+    }
+  }
+  return root;
+}
+
+function getFileTypeClass(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (['dol', 'elf', 'rel'].includes(ext)) return 'dc-type-bin';
+  if (['arc', 'rarc', 'szs', 'szp', 'u8'].includes(ext)) return 'dc-type-arc';
+  if (['thp', 'bik', 'avi', 'str'].includes(ext)) return 'dc-type-media';
+  if (['baa', 'bct', 'ast', 'adp', 'dsp', 'hps'].includes(ext)) return 'dc-type-audio';
+  if (['map', 'MAP'].includes(ext)) return 'dc-type-debug';
+  if (['bti', 'tpl', 'tex'].includes(ext)) return 'dc-type-texture';
+  return 'dc-type-other';
+}
+
+function renderDiscNode(entries, analyzed, depth) {
+  let html = '';
+  // Sort: dirs first, then files -- both alphabetical
+  const names = Object.keys(entries).sort((a, b) => {
+    const aDir = entries[a]._type === 'dir';
+    const bDir = entries[b]._type === 'dir';
+    if (aDir !== bDir) return aDir ? -1 : 1;
+    return a.localeCompare(b);
+  });
+
+  for (const name of names) {
+    const entry = entries[name];
+    if (entry._type === 'dir') {
+      const childCount = Object.keys(entry._children).length;
+      const dirId = 'dc-dir-' + Math.random().toString(36).slice(2, 8);
+      html += `<div class="dc-row dc-dir" style="padding-left:${depth * 1.2}rem;" data-dir-id="${dirId}">
+        <span class="dc-toggle" id="${dirId}-icon">+</span>
+        <span class="dc-name dc-dirname">${name}/</span>
+        <span class="dc-meta">${childCount} item${childCount !== 1 ? 's' : ''}</span>
+      </div>`;
+      html += `<div id="${dirId}" class="dc-children" hidden>`;
+      html += renderDiscNode(entry._children, analyzed, depth + 1);
+      html += '</div>';
+    } else {
+      const typeClass = getFileTypeClass(name);
+      const analysisBadge = analyzed[entry._path]
+        ? `<span class="dc-badge">${analyzed[entry._path].function_count.toLocaleString()} fns</span>`
+        : '';
+      html += `<div class="dc-row dc-file" style="padding-left:${depth * 1.2 + 1.2}rem;">
+        <span class="dc-name ${typeClass}">${name}</span>
+        <span class="dc-size">${formatFileSize(entry._size)}</span>
+        ${analysisBadge}
+      </div>`;
+    }
+  }
+  return html;
+}
+
+async function loadDiscContents() {
+  if (discContentsLoaded) return;
+  const treeEl = document.getElementById('disc-tree');
+  const summaryEl = document.getElementById('disc-summary');
+  treeEl.innerHTML = '<span style="color:var(--text-dim);">Loading disc filesystem...</span>';
+
+  try {
+    const data = await api('GET', `/api/projects/${projectId}/disc-contents`);
+    discContentsLoaded = true;
+
+    summaryEl.textContent = `${data.total_files} files \u2014 ${formatFileSize(data.total_size)} total`;
+
+    if (!data.files.length) {
+      treeEl.innerHTML = '<span style="color:var(--text-dim);">No files found in ISO.</span>';
+      return;
+    }
+
+    const tree = buildDiscTree(data.files);
+    const analyzed = data.analyzed_binaries || {};
+    treeEl.innerHTML = renderDiscNode(tree, analyzed, 0);
+
+    // Wire up directory toggle handlers via delegation
+    treeEl.addEventListener('click', (e) => {
+      const dirRow = e.target.closest('.dc-dir');
+      if (!dirRow) return;
+      const dirId = dirRow.dataset.dirId;
+      const el = document.getElementById(dirId);
+      const icon = document.getElementById(dirId + '-icon');
+      if (el.hidden) {
+        el.hidden = false;
+        icon.textContent = '\u2212';
+        dirRow.classList.add('dc-dir-open');
+      } else {
+        el.hidden = true;
+        icon.textContent = '+';
+        dirRow.classList.remove('dc-dir-open');
+      }
+    });
+  } catch (e) {
+    treeEl.innerHTML = `<span style="color:var(--red);">Failed to load: ${e.message}</span>`;
+  }
+}
+</script>
+</body>
+</html>
