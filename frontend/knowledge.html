@@ -235,13 +235,24 @@
     const projectId = param('id');
     if (!projectId) { window.location.href = '/index.html'; }
 
-    // ── Breadcrumb ──────────────────────────────────────────────────── //
+    // ── Breadcrumb (updated after project loads) ──────────────────── //
 
-    breadcrumb(document.getElementById('breadcrumb'), [
+    const bcEl = document.getElementById('breadcrumb');
+    breadcrumb(bcEl, [
       { text: 'Projects', href: '/index.html' },
-      { text: projectId.slice(0, 8), href: `/project.html?id=${projectId}` },
+      { text: '...', href: `/project.html?id=${projectId}` },
       { text: 'Knowledge' },
     ]);
+
+    // Fetch project name for breadcrumb
+    api('GET', `/api/projects/${projectId}`).then(p => {
+      const name = p.name || p.game_id || projectId.slice(0, 8);
+      breadcrumb(bcEl, [
+        { text: 'Projects', href: '/index.html' },
+        { text: name, href: `/project.html?id=${projectId}` },
+        { text: 'Knowledge' },
+      ]);
+    }).catch(() => {});
 
     // ── Tabs ────────────────────────────────────────────────────────── //
 

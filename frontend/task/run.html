@@ -295,7 +295,7 @@
       // Breadcrumb
       breadcrumb(document.getElementById('breadcrumb'), [
         { text: 'Projects', href: '/index.html' },
-        { text: project.game_id || project.name || 'Project', href: `/project.html?id=${P}` },
+        { text: project.name || project.game_id || 'Project', href: `/project.html?id=${P}` },
         { text: task.name || 'Task' },
       ]);
 
