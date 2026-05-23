@@ -22,7 +22,7 @@ from src.core.dolphin.diff import load_image_rgb
 from src.core.runner import run_dolphin_with_retry
 
 if TYPE_CHECKING:
-    from src.web.sessions import Project, Task
+    from src.core.sessions import Project, Task
 
 
 def build_run_gecko_for_task(task: "Task", project: "Project", spec: JobSpec) -> Tool:

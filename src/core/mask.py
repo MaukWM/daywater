@@ -7,7 +7,7 @@ import io
 import numpy as np
 from PIL import Image
 
-from src.web.sessions import Task, TaskState
+from src.core.sessions import Task, TaskState
 
 FRAME_SIZE = (640, 480)
 

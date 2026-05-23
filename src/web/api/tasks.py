@@ -13,7 +13,7 @@ from src.core.paths import binaries_cache
 from src.web.api.deps import _get_project, _get_task
 from src.web.events import stream_events
 from src.core.mask import save_mask
-from src.web.sessions import TaskState
+from src.core.sessions import TaskState
 from src.core.uploads import save_reference_frame
 
 router = APIRouter()

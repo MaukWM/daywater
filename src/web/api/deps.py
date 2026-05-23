@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import HTTPException
 
 from src.core.paths import sessions_root
-from src.web.sessions import Project, ProjectStore, Savestate, Task
+from src.core.sessions import Project, ProjectStore, Savestate, Task
 
 store = ProjectStore(sessions_root())
 

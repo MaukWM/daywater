@@ -10,7 +10,7 @@ from PIL import Image
 
 from src.core.dolphin.runner import read_game_id
 from src.core.logging import logger
-from src.web.sessions import ISO_CACHE_ROOT, Project, Savestate, Task, TaskState
+from src.core.sessions import ISO_CACHE_ROOT, Project, Savestate, Task, TaskState
 
 # Limits.
 MAX_ISO_SIZE = 10_000_000_000  # 10 GB (GC ~4.4 GB; Wii dual-layer ~8.5 GB)

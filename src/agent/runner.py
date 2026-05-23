@@ -13,7 +13,7 @@ from typing import Any
 
 from src.core.logging import logger
 from src.core.paths import cache_root, logs_root, samples_root, sessions_root
-from src.web.sessions import Project, Task, TaskState
+from src.core.sessions import Project, Task, TaskState
 
 _executor = ThreadPoolExecutor(max_workers=1)
 

@@ -19,7 +19,7 @@ from src.agent.prompts.builder import build_system_prompt
 from src.agent.scorer_builder import build_scorer
 from src.agent.tools.builder import build_tools
 from src.core.knowledge import FindingsStore
-from src.web.sessions import Project, Task
+from src.core.sessions import Project, Task
 
 # ── Unified Sample builder ────────────────────────────────────────────── #
 
