@@ -165,7 +165,7 @@ async def run_agent(task: Task, project: Project) -> dict[str, Any]:
     """Run the full agent pipeline and return results."""
     from inspect_ai import eval as inspect_eval
 
-    from src.web.sample_builder import build_task_from_project_task
+    from src.agent.sample_builder import build_task_from_project_task
 
     iso_path = project.iso_path.resolve()
     extract_root = _CACHE_ROOT / "extracted" / iso_path.stem

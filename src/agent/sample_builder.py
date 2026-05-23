@@ -71,7 +71,7 @@ def build_sample(task: Task, project: Project, spec: JobSpec) -> Sample:
     # Inject controller mapping (for runtime tasks)
     ctrl_block = ""
     if Capability.INPUT_INJECTION in spec.capabilities:
-        from src.web.controller_mapping import format_mapping_for_prompt, load_mapping
+        from src.core.dolphin.controller_mapping import format_mapping_for_prompt, load_mapping
 
         ctrl_mapping = load_mapping(project.root)
         ctrl_block = f"\n## {format_mapping_for_prompt(ctrl_mapping)}\n"
@@ -158,7 +158,7 @@ def build_task_from_project_task(
     # Build prompt
     controller_mapping = ""
     if Capability.INPUT_INJECTION in spec.capabilities:
-        from src.web.controller_mapping import format_mapping_for_prompt, load_mapping
+        from src.core.dolphin.controller_mapping import format_mapping_for_prompt, load_mapping
 
         controller_mapping = format_mapping_for_prompt(load_mapping(project.root))
 

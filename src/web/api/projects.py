@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from src.core.ghidra import list_iso_files
 from src.web.api.deps import _get_project, store
 from src.web.events import stream_events
-from src.web.uploads import save_iso
+from src.core.uploads import save_iso
 
 router = APIRouter()
 
@@ -89,7 +89,7 @@ async def upload_iso(project_id: str, file: UploadFile, background_tasks: Backgr
         raise HTTPException(400, str(e))
 
     # Kick off survey in background.
-    from src.web.runner import run_survey
+    from src.agent.runner import run_survey
 
     async def _survey() -> None:
         p = _get_project(project_id)
@@ -118,7 +118,7 @@ async def project_event_stream(project_id: str) -> StreamingResponse:
 
 @router.get("/api/projects/{project_id}/controller-mapping")
 async def get_controller_mapping(project_id: str) -> dict:  # type: ignore[type-arg]
-    from src.web.controller_mapping import load_mapping
+    from src.core.dolphin.controller_mapping import load_mapping
 
     project = _get_project(project_id)
     return load_mapping(project.root)
@@ -126,7 +126,7 @@ async def get_controller_mapping(project_id: str) -> dict:  # type: ignore[type-
 
 @router.post("/api/projects/{project_id}/controller-mapping")
 async def update_controller_mapping(project_id: str, body: dict) -> dict[str, bool]:  # type: ignore[type-arg]
-    from src.web.controller_mapping import load_mapping, save_mapping
+    from src.core.dolphin.controller_mapping import load_mapping, save_mapping
 
     project = _get_project(project_id)
     # Merge incoming data with existing mapping

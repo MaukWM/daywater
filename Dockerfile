@@ -82,8 +82,6 @@ RUN uv sync --frozen --no-dev
 
 # --- Application code --------------------------------------------------- #
 COPY --chown=1000:1000 src/ src/
-COPY --chown=1000:1000 samples/ samples/
-COPY --chown=1000:1000 cheats/ cheats/
 
 # --- Runtime config ------------------------------------------------------ #
 # Ghidra JVM memory (16 GB server, leave room for Dolphin)

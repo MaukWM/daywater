@@ -12,9 +12,9 @@ from src.core.knowledge import FindingsStore
 from src.core.paths import binaries_cache
 from src.web.api.deps import _get_project, _get_task
 from src.web.events import stream_events
-from src.web.mask import save_mask
+from src.core.mask import save_mask
 from src.web.sessions import TaskState
-from src.web.uploads import save_reference_frame
+from src.core.uploads import save_reference_frame
 
 router = APIRouter()
 
@@ -184,7 +184,7 @@ async def capture_frame(project_id: str, task_id: str) -> dict:  # type: ignore[
     if ss is None:
         raise HTTPException(400, "No savestate selected for this task")
 
-    from src.web.runner import run_capture_frame
+    from src.agent.runner import run_capture_frame
 
     frame_path = await run_capture_frame(ss.savestate_path, project.iso_path)
     save_reference_frame(task, frame_path)
@@ -294,7 +294,7 @@ async def start_run(project_id: str, task_id: str, background_tasks: BackgroundT
     if task.state != TaskState.READY:
         raise HTTPException(400, f"Cannot start run in state {task.state}")
 
-    from src.web.runner import run_agent
+    from src.agent.runner import run_agent
 
     async def _run() -> None:
         p, t = _get_task(project_id, task_id)

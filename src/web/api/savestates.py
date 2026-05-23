@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse
 
 from src.core.knowledge import FindingsStore
 from src.web.api.deps import _get_project, _get_savestate
-from src.web.uploads import save_savestate_to_project
+from src.core.uploads import save_savestate_to_project
 
 router = APIRouter()
 
@@ -102,8 +102,8 @@ async def render_savestate_screenshot(project_id: str, savestate_id: str) -> dic
     if not ss.savestate_path.exists():
         raise HTTPException(404, "Savestate file missing")
 
-    from src.web.runner import run_capture_frame
-    from src.web.uploads import save_screenshot_to_savestate
+    from src.agent.runner import run_capture_frame
+    from src.core.uploads import save_screenshot_to_savestate
 
     frame_path = await run_capture_frame(ss.savestate_path, project.iso_path)
     save_screenshot_to_savestate(ss, frame_path)

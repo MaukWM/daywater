@@ -43,7 +43,7 @@ async def test_api_key(body: dict) -> dict:  # type: ignore[type-arg]
 @router.post("/api/setup/init-ghidra")
 async def init_ghidra(background_tasks: BackgroundTasks) -> dict[str, bool]:
     """Start Ghidra JVM initialization in the background."""
-    from src.web.runner import run_ghidra_init
+    from src.agent.runner import run_ghidra_init
 
     async def _init() -> None:
         try:
@@ -61,7 +61,7 @@ async def init_ghidra(background_tasks: BackgroundTasks) -> dict[str, bool]:
 @router.get("/api/setup/init-ghidra/events")
 async def ghidra_init_events() -> StreamingResponse:
     """SSE stream of Ghidra init progress."""
-    from src.web.runner import stream_ghidra_init_events
+    from src.agent.runner import stream_ghidra_init_events
 
     return StreamingResponse(
         stream_ghidra_init_events(),
