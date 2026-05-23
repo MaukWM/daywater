@@ -28,7 +28,9 @@ from src.core.logging import logger
 
 # Content-addressed cache root. One subdirectory per binary SHA-1; shared
 # across samples and across runs. Gitignored.
-CACHE_ROOT = Path(__file__).resolve().parents[2] / "cache" / "binaries"
+from src.core.paths import binaries_cache
+
+CACHE_ROOT = binaries_cache()
 
 
 def cache_dir_for_sha1(sha1: str) -> Path:

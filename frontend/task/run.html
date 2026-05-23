@@ -100,11 +100,13 @@
           </div>
           <div class="btn-group">
             <button id="start-run-btn" class="primary">Start Agent Run</button>
+            <button id="reset-task-btn" class="danger" hidden>Reset Stuck Task</button>
           </div>
-          <div class="spinner" id="run-spinner" hidden>Agent running...</div>
-          <div id="event-log" hidden>
-            <h3>Event Log</h3>
-            <pre id="event-log-content"></pre>
+          <div id="run-status-panel" hidden style="margin-top:1rem;">
+            <div class="spinner" id="run-spinner">Agent running...</div>
+            <p class="hint" style="margin-top:0.75rem;">
+              Follow detailed agent traces in <a id="inspect-link-inline" href="#" target="_blank">Inspect AI Viewer</a>.
+            </p>
           </div>
         </div>
       </div>
@@ -263,12 +265,44 @@
         }
       }
 
+      // Show reference image if already captured
+      if (visibleKeys.includes('reference') && level >= 2) {
+        const captureBtn = document.getElementById('capture-btn');
+        if (captureBtn) captureBtn.hidden = true;
+        showReferencePreview();
+      }
+
+      // Init mask painter if applicable
+      if (visibleKeys.includes('mask') && level >= 2) {
+        initMaskStep();
+      }
+      if (visibleKeys.includes('mask') && level >= 3) {
+        loadExistingMask();
+      }
+
       // Special cases
       if (state === 'running') {
         setStepState(steps.run, 'active');
         const statusEl = document.getElementById('step-run-status');
         if (statusEl) statusEl.textContent = 'Running...';
+        showRunningUI();
         startPolling();
+        // Check if stuck (running but no processes after a few seconds)
+        setTimeout(async () => {
+          try {
+            const procs = await api('GET', '/api/processes');
+            const t = await api('GET', TBASE);
+            if (t.state === 'running' && procs.length === 0) {
+              document.getElementById('run-spinner').style.display = 'none';
+              document.getElementById('reset-task-btn').hidden = false;
+              const sp = document.getElementById('run-status-panel');
+              if (sp) {
+                sp.hidden = false;
+                sp.querySelector('.hint').textContent = 'Task appears stuck — no agent process running. Reset to try again.';
+              }
+            }
+          } catch {}
+        }, 5000);
       }
 
       if (state === 'done' || state === 'failed') {
@@ -310,21 +344,26 @@
       const type = taskType(task);
       const visible = applicableSteps(type);
 
-      hideInapplicableSteps(visible);
-      updateStepNumbers(visible);
+      try {
+        hideInapplicableSteps(visible);
+        updateStepNumbers(visible);
+      } catch (e) { console.error('step_setup_error', e); }
 
       // Hide run_seconds for non-runtime types (static tasks)
       if (type === 'static') {
-        document.getElementById('run-seconds-row').hidden = true;
+        const rsRow = document.getElementById('run-seconds-row');
+        if (rsRow) rsRow.hidden = true;
       }
 
       // Pre-fill agent prompt from job_spec
       const targetDesc = (task.job_spec || {}).target_description || '';
       if (targetDesc) {
-        document.getElementById('agent-prompt').value = targetDesc;
+        const promptEl = document.getElementById('agent-prompt');
+        if (promptEl) promptEl.value = targetDesc;
       }
 
-      // Apply current state
+      // Apply current state — MUST run to lock/unlock steps
+      console.log('[daywater] applyState', task.state, visible);
       applyState(visible, task.state);
 
       // Load savestates if applicable
@@ -332,25 +371,9 @@
         loadSavestates();
       }
 
-      // If frame_ready or later and visual, show reference image
-      if (visible.includes('reference') && stateLevel(task.state) >= 2) {
-        showReferencePreview();
-      }
-
-      // If mask step visible and frame_ready, init mask painter
-      if (visible.includes('mask') && stateLevel(task.state) >= 2) {
-        initMaskStep();
-      }
-
-      // If mask already submitted, load it as read-only
-      if (visible.includes('mask') && stateLevel(task.state) >= 3) {
-        loadExistingMask();
-      }
-
-      // If running, start poll
+      // If running, show running UI
       if (task.state === 'running') {
         showRunningUI();
-        startPolling();
       }
     }
 
@@ -422,8 +445,10 @@
       btn.disabled = true;
       spinner.hidden = false;
       try {
-        await api('POST', `${TBASE}/capture`);
+        const result = await api('POST', `${TBASE}/capture`);
         task = await api('GET', TBASE);
+        btn.hidden = true;
+        spinner.hidden = true;
         showReferencePreview();
         const visible = applicableSteps(taskType(task));
         applyState(visible, task.state);
@@ -432,7 +457,6 @@
         }
       } catch (e) {
         alert('Capture failed: ' + e.message);
-      } finally {
         btn.disabled = false;
         spinner.hidden = true;
       }
@@ -513,8 +537,8 @@
 
     function showRunningUI() {
       document.getElementById('start-run-btn').disabled = true;
-      document.getElementById('run-spinner').hidden = false;
-      document.getElementById('event-log').hidden = false;
+      document.getElementById('run-status-panel').hidden = false;
+      document.getElementById('inspect-link-inline').href = inspectUrl;
     }
 
     document.getElementById('start-run-btn').addEventListener('click', async () => {
@@ -542,27 +566,28 @@
       }
     });
 
+    document.getElementById('reset-task-btn').addEventListener('click', async () => {
+      if (!confirm('Reset this task back to ready? You can then re-run it.')) return;
+      try {
+        await api('POST', `${TBASE}/reset`);
+        location.reload();
+      } catch (e) {
+        alert('Reset failed: ' + e.message);
+      }
+    });
+
     function startPolling() {
       if (pollTimer) return;
-      const logEl = document.getElementById('event-log-content');
-      document.getElementById('event-log').hidden = false;
 
       pollTimer = setInterval(async () => {
         try {
           task = await api('GET', TBASE);
 
-          // Append status info to log
-          const ts = new Date().toLocaleTimeString();
-          logEl.textContent += `[${ts}] state=${task.state}`;
-          if (task.status_message) logEl.textContent += ` — ${task.status_message}`;
-          logEl.textContent += '\n';
-          logEl.scrollTop = logEl.scrollHeight;
-
           if (task.state === 'done' || task.state === 'failed') {
             clearInterval(pollTimer);
             pollTimer = null;
-            document.getElementById('run-spinner').hidden = true;
-            document.getElementById('step-run-status').textContent = 'Done';
+            document.getElementById('run-spinner').style.display = 'none';
+            document.getElementById('step-run-status').textContent = task.state === 'done' ? 'Done' : 'Failed';
             setStepState(steps.run, 'completed');
             setStepState(steps.results, 'active');
             loadResults();

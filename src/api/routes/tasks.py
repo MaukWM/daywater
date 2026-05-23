@@ -144,6 +144,20 @@ async def get_task_status(project_id: str, task_id: str) -> dict:  # type: ignor
     return d
 
 
+# ── Reset stuck tasks ───────────────────────────────────────────────── #
+
+
+@router.post("/api/projects/{project_id}/tasks/{task_id}/reset")
+async def reset_task(project_id: str, task_id: str) -> dict:  # type: ignore[type-arg]
+    """Reset a stuck running/failed task back to ready so it can be re-run."""
+    _, task = _get_task(project_id, task_id)
+    if task.state not in (TaskState.RUNNING, TaskState.FAILED):
+        raise HTTPException(400, f"Cannot reset task in state {task.state}")
+    task.config.state = TaskState.READY
+    task.save()
+    return {"ok": True, "state": "ready"}
+
+
 # ── Task savestate selection ─────────────────────────────────────────── #
 
 
