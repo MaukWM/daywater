@@ -102,7 +102,7 @@
   </div>
 
   <script type="module">
-    import { api, param } from '../shared/api.js';
+    import { api, param, applyDemoGuard } from '../shared/api.js';
     import { renderLayout, breadcrumb } from '../shared/layout.js';
 
     renderLayout();
@@ -399,6 +399,7 @@
     // ── Init ───────────────────────────────────────────────────────── //
 
     await Promise.all([loadProjectInfo(), loadPresets(), loadSchema()]);
+    await applyDemoGuard();
   </script>
 </body>
 </html>

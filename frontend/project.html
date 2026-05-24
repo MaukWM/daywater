@@ -115,7 +115,7 @@
 </div>
 
 <script type="module">
-import { api, timeAgo, formatFileSize, param } from './shared/api.js';
+import { api, timeAgo, formatFileSize, param, applyDemoGuard } from './shared/api.js';
 import { renderLayout, breadcrumb } from './shared/layout.js';
 
 // ── State ──────────────────────────────────────────────────────────── //
@@ -134,7 +134,7 @@ const STICK_DIRS = ['up','down','left','right'];
 // ── Init ───────────────────────────────────────────────────────────── //
 
 renderLayout();
-loadProject();
+loadProject().then(() => applyDemoGuard());
 
 // ── Project loader ─────────────────────────────────────────────────── //
 

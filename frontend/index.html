@@ -29,7 +29,7 @@
   </main>
 
   <script type="module">
-    import { api, timeAgo } from './shared/api.js';
+    import { api, timeAgo, applyDemoGuard } from './shared/api.js';
     import { renderLayout } from './shared/layout.js';
 
     renderLayout();
@@ -39,7 +39,7 @@
     async function checkSetup() {
       try {
         const settings = await api('GET', '/api/settings');
-        if (!settings.setup_complete) {
+        if (!settings.setup_complete && !settings.demo) {
           window.location.href = '/setup.html';
         }
       } catch (e) {
@@ -188,6 +188,7 @@
 
     await checkSetup();
     await loadProjects();
+    await applyDemoGuard();
   </script>
 </body>
 </html>

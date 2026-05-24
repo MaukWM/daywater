@@ -137,7 +137,7 @@
 
   <script src="/task/mask-painter.js"></script>
   <script type="module">
-    import { api, param, inspectUrl } from '../shared/api.js';
+    import { api, param, inspectUrl, applyDemoGuard } from '../shared/api.js';
     import { renderLayout, breadcrumb } from '../shared/layout.js';
 
     renderLayout();
@@ -642,6 +642,7 @@
     // ── Init ───────────────────────────────────────────────────────────── //
 
     await init();
+    await applyDemoGuard();
   </script>
 </body>
 </html>

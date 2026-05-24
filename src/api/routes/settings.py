@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from src.core.config import web_settings
+from src.core.config import settings, web_settings
 
 router = APIRouter()
 
@@ -20,6 +20,7 @@ async def get_settings() -> dict:  # type: ignore[type-arg]
         "model": web_settings.get("model", ""),
         "setup_complete": web_settings.get("setup_complete", False),
         "ghidra_initialized": web_settings.get("ghidra_initialized", False),
+        "demo": settings.DEMO,
     }
 
 

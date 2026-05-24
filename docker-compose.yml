@@ -16,6 +16,7 @@ services:
       - DAYWATER_GHIDRA_HOME=/opt/ghidra
       - _JAVA_OPTIONS=-Xmx4g
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DAYWATER_DEMO=${DAYWATER_DEMO:-}
     volumes:
       - ./sessions:/app/sessions
       - ./cache:/app/cache

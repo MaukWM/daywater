@@ -39,3 +39,15 @@ export const inspectUrl = 'http://' + window.location.hostname + ':7575';
 export function param(name) {
   return new URLSearchParams(window.location.search).get(name) || '';
 }
+
+/**
+ * Demo mode: set body class so CSS can hide destructive controls.
+ * The backend middleware is the real guard (403 on all non-GET).
+ */
+export async function applyDemoGuard() {
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    if (!s.demo) return;
+    document.body.classList.add('demo-mode');
+  } catch {}
+}

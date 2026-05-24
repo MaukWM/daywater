@@ -227,7 +227,7 @@
   </div>
 
   <script type="module">
-    import { api, param } from './shared/api.js';
+    import { api, param, applyDemoGuard } from './shared/api.js';
     import { renderLayout, breadcrumb } from './shared/layout.js';
 
     renderLayout();
@@ -586,9 +586,7 @@
 
     // ── Init ────────────────────────────────────────────────────────── //
 
-    loadResearch();
-    loadGeckoCodes();
-    loadAnnotations();
+    Promise.all([loadResearch(), loadGeckoCodes(), loadAnnotations()]).catch(() => {}).finally(() => applyDemoGuard());
   </script>
 </body>
 </html>

@@ -56,6 +56,20 @@ export function renderLayout() {
   `;
   document.body.prepend(header);
 
+  // ── Demo banner ──────────────────────────────────────────────────────
+  api('GET', '/api/settings').then(s => {
+    if (!s.demo) return;
+    document.body.classList.add('demo-mode');
+    const banner = document.createElement('div');
+    banner.id = 'demo-banner';
+    banner.textContent = 'Demo mode \u2014 read only.';
+    document.body.prepend(banner);
+    // Set CSS variable so fixed elements can offset below the banner
+    requestAnimationFrame(() => {
+      document.documentElement.style.setProperty('--demo-banner-h', banner.offsetHeight + 'px');
+    });
+  }).catch(() => {});
+
   // Wire up toolbar globals
   window._toggleSettingsPanel = () => {
     const p = document.getElementById('settings-panel');

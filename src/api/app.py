@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from src.core.config import web_settings
+from src.core.config import settings, web_settings
 from src.core.paths import logs_root
 from src.api.routes.knowledge import router as knowledge_router
 from src.api.routes.processes import router as processes_router
@@ -22,7 +23,8 @@ from src.api.routes.tasks import router as tasks_router
 app = FastAPI(title="Daywater", version="0.2.0")
 
 # Apply persisted settings to env on import (app startup)
-web_settings.apply_to_env()
+if not settings.DEMO:
+    web_settings.apply_to_env()
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +32,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Demo mode (read-only) ──────────────────────────────────────────── #
+
+if settings.DEMO:
+
+    @app.middleware("http")
+    async def demo_read_only(request: Request, call_next):  # type: ignore[no-untyped-def]
+        if request.method not in ("GET", "HEAD", "OPTIONS"):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "This is a read-only demo instance."},
+            )
+        return await call_next(request)
+
 
 # ── Include routers ──────────────────────────────────────────────────── #
 

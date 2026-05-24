@@ -22,6 +22,7 @@ class Settings:
         self.DEBUG: bool = os.getenv("DEBUG", "false").lower() in ("true", "1", "t", "yes")
         self.LOG_LEVEL: str = os.getenv("LOG_LEVEL", "DEBUG" if self.DEBUG else "INFO")
         self.LOG_FORMAT: str = os.getenv("LOG_FORMAT", "console")
+        self.DEMO: bool = os.getenv("DAYWATER_DEMO", "false").lower() in ("true", "1", "t", "yes")
 
 
 settings = Settings()
