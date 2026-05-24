@@ -123,7 +123,7 @@
           <div id="result-gecko" hidden></div>
           <div class="btn-group" id="result-actions" hidden>
             <a id="download-gecko-btn" style="display:inline-block; padding:0.4rem 1rem; border:1px solid var(--green-dim); color:var(--green); font-size:0.85rem;">Download Gecko Code</a>
-            <a id="inspect-link" href="#" target="_blank">Open in Inspect</a>
+            <a id="inspect-link" target="_blank">Open in Inspect</a>
           </div>
           <div id="result-frame-container" hidden>
             <h3>Result Frame</h3>
@@ -325,6 +325,10 @@
           `<div class="empty-state">Failed to load task: ${e.message}</div>`;
         return;
       }
+
+      // Set Inspect AI viewer link eagerly
+      document.getElementById('inspect-link').href = inspectUrl;
+      document.getElementById('inspect-link-inline').href = inspectUrl;
 
       // Breadcrumb
       breadcrumb(document.getElementById('breadcrumb'), [
@@ -538,7 +542,6 @@
     function showRunningUI() {
       document.getElementById('start-run-btn').disabled = true;
       document.getElementById('run-status-panel').hidden = false;
-      document.getElementById('inspect-link-inline').href = inspectUrl;
     }
 
     document.getElementById('start-run-btn').addEventListener('click', async () => {
@@ -625,8 +628,6 @@
         actionsEl.hidden = false;
         document.getElementById('download-gecko-btn').href = `${TBASE}/result.gecko`;
         document.getElementById('download-gecko-btn').download = 'result.gecko';
-        document.getElementById('inspect-link').href = inspectUrl;
-
         // Result frame
         if (result.has_frame) {
           const frameContainer = document.getElementById('result-frame-container');

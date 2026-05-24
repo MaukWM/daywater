@@ -372,11 +372,13 @@ async function loadSavestateFindings(ssId) {
     }
     noFindings.hidden = true;
     section.hidden = false;
+    const kinds = new Set(findings.map(f => f.kind));
+    const showKind = kinds.size > 1;
     const kindClass = k => k === 'address' ? 'kb-kind-addr' : k === 'function' ? 'kb-kind-func' : 'kb-kind-note';
     table.innerHTML =
-      `<tr><th>Kind</th><th>Address</th><th>Label</th><th class="kb-th-detail">Detail</th><th></th></tr>` +
+      `<tr>${showKind ? '<th>Kind</th>' : ''}<th>Address</th><th>Label</th><th class="kb-th-detail">Detail</th><th></th></tr>` +
       findings.map(f => `<tr>
-        <td><span class="kb-kind ${kindClass(f.kind)}">${f.kind}</span></td>
+        ${showKind ? `<td><span class="kb-kind ${kindClass(f.kind)}">${f.kind}</span></td>` : ''}
         <td class="kb-addr">${f.address ? '0x' + f.address : ''}</td>
         <td class="kb-name">${f.label}</td>
         <td class="kb-detail">${f.detail}</td>

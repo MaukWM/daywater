@@ -904,6 +904,8 @@ button.danger:hover:not(:disabled) {
 
 .kb-detail {
   color: var(--text);
+  word-break: break-word;
+  max-width: 300px;
 }
 
 .kb-dim {
@@ -1169,8 +1171,8 @@ button.danger:hover:not(:disabled) {
 }
 
 .proj-left {
-  width: 45%;
-  min-width: 350px;
+  width: 55%;
+  min-width: 400px;
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
@@ -1308,13 +1310,12 @@ button.danger:hover:not(:disabled) {
 
 .ctrl-map-grid {
   display: flex;
-  gap: 1.5rem;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .ctrl-section {
-  flex: 1;
-  min-width: 250px;
+  width: 100%;
 }
 
 .ctrl-row {
