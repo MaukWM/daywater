@@ -1,0 +1,36 @@
+# Slim demo image — serves only the read-only web UI + Inspect AI viewer.
+# No Dolphin, Ghidra, JDK, or any emulation/RE tooling.
+
+FROM python:3.13-slim
+
+# --- Minimal system deps -------------------------------------------------- #
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- Runtime user & directories ------------------------------------------- #
+RUN mkdir -p /app/logs /app/sessions /app/cache \
+    && chown -R 1000:1000 /app
+
+USER 1000
+
+# --- Python dependencies -------------------------------------------------- #
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+ENV UV_PYTHON=python3.13
+ENV UV_CACHE_DIR=/app/.uv-cache
+
+WORKDIR /app
+COPY --chown=1000:1000 pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev && rm -rf /app/.uv-cache
+
+# --- Application code ----------------------------------------------------- #
+COPY --chown=1000:1000 src/ src/
+COPY --chown=1000:1000 frontend/ frontend/
+
+# --- Demo mode always on -------------------------------------------------- #
+ENV DAYWATER_DEMO=true
+
+EXPOSE 7860 7575
+
+# Simple entrypoint — no gosu/permission fixup needed (no bind-mount writes).
+CMD ["uv", "run", "daywater-web"]

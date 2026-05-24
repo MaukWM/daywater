@@ -1,0 +1,16 @@
+# Demo deployment — read-only site with snapshotted data.
+# Usage: docker compose -f docker-compose.demo.yml up --build
+services:
+  daywater-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    init: true
+    ports:
+      - "7860:7860"
+      - "7575:7575"
+    volumes:
+      - ./demo-data/sessions:/app/sessions:ro
+      - ./demo-data/logs:/app/logs:ro
+      - ./demo-data/cache:/app/cache:ro
+    restart: unless-stopped
