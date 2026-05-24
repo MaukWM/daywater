@@ -420,9 +420,9 @@
         const desc = gc.description ? gc.description.substring(0, 60) + (gc.description.length > 60 ? '...' : '') : '';
         const task = gc.task_id ? `task ${gc.task_id.substring(0, 8)}` : '';
         return `<div class="kb-file-item" data-filename="${esc(gc.filename || gc.name)}">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <span style="font-weight:600;">$${esc(name)}</span>
-            <button class="kb-file-delete" data-filename="${esc(gc.filename || gc.name)}" title="Delete">x</button>
+          <div style="display:flex; align-items:start; justify-content:space-between; gap:0.5rem;">
+            <span style="font-weight:600; word-break:break-all; min-width:0;">$${esc(name)}</span>
+            <button class="kb-file-delete" data-filename="${esc(gc.filename || gc.name)}" title="Delete" style="flex-shrink:0;">x</button>
           </div>
           <span style="font-size:0.72rem; color:var(--text-dim); line-height:1.3;">${gc.lines} lines${desc ? ' — ' + esc(desc) : ''}</span>
           ${task ? `<span style="font-size:0.68rem; color:var(--text-dim);">${task}</span>` : ''}
