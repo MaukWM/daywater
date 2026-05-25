@@ -15,7 +15,9 @@
 
 ---
 
-Upload a GameCube ISO, point an agent at it, and watch it produce working Gecko cheat codes. Under the hood, Ghidra decompiles the binary, Dolphin runs the game live, and the agent reads memory, sets watchpoints, assembles PowerPC, and injects codes — all verified in real time.
+A self-hosted platform that connects Ghidra, Dolphin, and an LLM to reverse engineer GameCube games, understand their codebases and produce Gecko codes.
+
+Runs in a single docker container so no need to manually install any tooling. Deploy it on a server and you can do RE from anywhere!
 
 ## Quick Start (Docker)
 
@@ -27,7 +29,7 @@ docker compose up --build -d
 
 Open `http://localhost:7860`. On first launch, a setup wizard walks you through:
 
-1. **API key + model** — configure your LLM backend (default: `openai/gpt-5.5`)
+1. **API key + model** — configure your LLM backend (default: `openai/gpt-5.5`) (Note: Only OpenAI is supported for now, extensive support coming soon)
 2. **Ghidra initialization** — warms the JVM and verifies the analysis engine
 
 After setup: upload an ISO, upload a savestate, create a task, run the agent.
@@ -37,7 +39,7 @@ After setup: upload an ISO, upload a savestate, create a task, run the agent.
 
 **Requirements:** Docker, 8 GB+ RAM (16 GB recommended), `--shm-size=2g` (set in compose).
 
-## What It Does
+## 3 task types
 
 Daywater has a **unified task system** with three goal types:
 
@@ -57,8 +59,10 @@ Each task is independently configured with **capabilities** (static RE, Gecko in
 | `read_memory` | Read live game RAM |
 | `make_c2_hook` | Assemble PowerPC and inject C2 Gecko hooks |
 | `apply_gecko_code` | Hot-reload Gecko codes into the running game |
-| `press_button` | Inject controller input |
+| `press_button` / `set_stick` | Full controller input — buttons, D-pad, analog sticks |
 | `capture_screenshot` | Grab the current frame from Dolphin |
+| `scan_memory` | Differential memory scanning — find what changed between two moments |
+| `rename_function` | Persistently annotate functions — names carry across tasks |
 
 ### Key Features
 
@@ -86,7 +90,7 @@ The agent runs via [Inspect AI](https://inspect.ai). Ghidra runs in-process via 
 
 ## Local Dev
 
-### Nix flake (recommended)
+### Nix flake
 
 ```bash
 nix develop          # shell with Dolphin, Ghidra, Python 3.13, uv
@@ -95,7 +99,7 @@ uv sync
 
 ### Manual
 
-Install Dolphin, Python 3.13+, uv, and Ghidra, then:
+Install Dolphin, Python 3.13+, uv, and [Ghidra 12.0.4+](https://github.com/NationalSecurityAgency/ghidra/releases/tag/Ghidra_12.0.4_build), then:
 
 ```bash
 uv sync
@@ -104,7 +108,7 @@ export DAYWATER_GHIDRA_HOME=/path/to/ghidra
 
 ### Savestates
 
-Savestates must be created with **[Dolphin 2603a](https://dolphin-emu.org/download/release/2603a/)** (the build in the container and nix flake). They are not portable across Dolphin versions.
+Savestates must be created with **[Dolphin 2603a](https://dolphin-emu.org/download/release/2603a/)** (the build in the container and nix flake). They are not portable across Dolphin versions AFAIK.
 
 1. Boot the game in Dolphin GUI
 2. Play to an in-game scene
@@ -130,7 +134,7 @@ uv run pytest
 
 ## AI Development Disclosure
 
-Yes, AI was heavily employed in the creation of this project. Shoutouts to claude for figuring out how to get ghidra and dolphin work in docker containers.
+Yes, AI was heavily employed in the creation of this project. Shoutouts to claude for figuring out how to get ghidra and dolphin work in docker containers. Special gratitude for all the frontend work.
 
 ## License
 
