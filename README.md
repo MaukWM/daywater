@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="daywater" width="80">
+  <a href="https://daywater.dev"><img src="assets/logo.svg" alt="daywater" width="80"></a>
 </p>
 
 <h1 align="center">daywater</h1>
