@@ -137,7 +137,7 @@
 
   <script src="/task/mask-painter.js"></script>
   <script type="module">
-    import { api, param, inspectUrl, applyDemoGuard } from '../shared/api.js';
+    import { api, param, getInspectUrl, applyDemoGuard } from '../shared/api.js';
     import { renderLayout, breadcrumb } from '../shared/layout.js';
 
     renderLayout();
@@ -326,9 +326,11 @@
         return;
       }
 
-      // Set Inspect AI viewer link eagerly
-      document.getElementById('inspect-link').href = inspectUrl;
-      document.getElementById('inspect-link-inline').href = inspectUrl;
+      // Set Inspect AI viewer link
+      getInspectUrl().then(url => {
+        document.getElementById('inspect-link').href = url;
+        document.getElementById('inspect-link-inline').href = url;
+      });
 
       // Breadcrumb
       breadcrumb(document.getElementById('breadcrumb'), [

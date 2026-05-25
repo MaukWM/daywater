@@ -9,9 +9,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Runtime user & directories ------------------------------------------- #
-RUN mkdir -p /app/logs /app/sessions /app/cache \
-    && chown -R 1000:1000 /app
+RUN mkdir -p /app/logs /app/sessions /app/cache /home/appuser/.local \
+    && chown -R 1000:1000 /app /home/appuser
 
+ENV HOME=/home/appuser
 USER 1000
 
 # --- Python dependencies -------------------------------------------------- #

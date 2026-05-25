@@ -32,7 +32,20 @@ export function formatFileSize(bytes) {
   return (bytes / 1073741824).toFixed(2) + ' GB';
 }
 
-/** URL to the Inspect AI log viewer on port 7575. */
+/** URL to the Inspect AI log viewer. Uses INSPECT_PUBLIC_URL from backend if set, otherwise hostname:7575. */
+let _inspectUrl = null;
+export async function getInspectUrl() {
+  if (_inspectUrl !== null) return _inspectUrl;
+  try {
+    const s = await fetch('/api/settings').then(r => r.json());
+    _inspectUrl = s.inspect_url || ('http://' + window.location.hostname + ':7575');
+  } catch {
+    _inspectUrl = 'http://' + window.location.hostname + ':7575';
+  }
+  return _inspectUrl;
+}
+
+/** @deprecated Use getInspectUrl() instead. Kept for sync contexts. */
 export const inspectUrl = 'http://' + window.location.hostname + ':7575';
 
 /** Read a query-string parameter. */
