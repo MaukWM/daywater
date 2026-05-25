@@ -105,6 +105,7 @@ class TaskConfig:
     result_gecko: str = ""
     result_hud_mean: float = 0.0
     result_preserve_mean: float = 0.0
+    result_log_file: str = ""
 
     # ── Legacy fields (for migration only) ──────────────────────── #
     # These are read during deserialization for backwards compat

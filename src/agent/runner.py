@@ -233,6 +233,8 @@ async def run_agent(task: Task, project: Project) -> dict[str, Any]:
 
             task.config.result_verdict = result.get("verdict", "FAIL")
             task.config.result_gecko = result.get("gecko", "")
+            if result.get("log_file"):
+                task.config.result_log_file = Path(result["log_file"]).name
 
             # Save gecko code to file for download.
             if result.get("gecko"):

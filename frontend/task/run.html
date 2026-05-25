@@ -326,9 +326,11 @@
         return;
       }
 
-      // Set Inspect AI viewer link
+      // Set Inspect AI viewer links — deep-link to the specific log if available
       getInspectUrl().then(url => {
-        document.getElementById('inspect-link').href = url;
+        const logFile = task.result_log_file;
+        const deepUrl = logFile ? `${url}/#/tasks/${encodeURIComponent(logFile)}/samples/messages` : url;
+        document.getElementById('inspect-link').href = deepUrl;
         document.getElementById('inspect-link-inline').href = url;
       });
 
@@ -610,12 +612,14 @@
       try {
         const result = await api('GET', `${TBASE}/result`);
 
-        // Verdict
+        // Verdict — only show for pixel_diff tasks that have real pass/fail criteria
         const verdictEl = document.getElementById('verdict-display');
-        const isPass = result.verdict === 'PASS';
-        verdictEl.innerHTML = `<div class="verdict ${isPass ? 'pass' : 'fail'}">${result.verdict || 'UNKNOWN'}</div>`;
-        if (result.accuracy !== undefined && result.accuracy !== null) {
+        if (result.verdict && result.accuracy !== undefined && result.accuracy !== null && result.accuracy < 1.0) {
+          const isPass = result.verdict === 'PASS';
+          verdictEl.innerHTML = `<div class="verdict ${isPass ? 'pass' : 'fail'}">${result.verdict}</div>`;
           verdictEl.innerHTML += `<div style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.75rem;">Accuracy: ${(result.accuracy * 100).toFixed(1)}%</div>`;
+        } else {
+          verdictEl.innerHTML = `<div class="verdict pass">Complete</div>`;
         }
 
         // Gecko code
