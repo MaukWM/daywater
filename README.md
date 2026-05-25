@@ -1,10 +1,26 @@
-# Daywater
+<p align="center">
+  <img src="assets/logo.svg" alt="daywater" width="80">
+</p>
 
-AI-Driven GameCube reverse engineering platform.
+<h1 align="center">daywater</h1>
+
+<p align="center">
+  GameCube reverse engineering, simplified
+</p>
+
+<p align="center">
+  <a href="https://demo.daywater.dev">Demo</a> &middot;
+  <a href="https://daywater.dev">Website</a>
+</p>
+
+---
+
+Upload a GameCube ISO, point an agent at it, and watch it produce working Gecko cheat codes. Under the hood, Ghidra decompiles the binary, Dolphin runs the game live, and the agent reads memory, sets watchpoints, assembles PowerPC, and injects codes — all verified in real time.
 
 ## Quick Start (Docker)
 
 ```bash
+git clone https://github.com/MaukWM/daywater.git
 cd daywater
 docker compose up --build -d
 ```
@@ -31,6 +47,19 @@ Daywater has a **unified task system** with three goal types:
 
 Each task is independently configured with **capabilities** (static RE, Gecko injection, RAM poke, input injection, frame capture, pixel diff), evaluation method, budget, and input-mutation hints. Presets are available for common workflows.
 
+### Agent Tools
+
+| Tool | What it does |
+|------|-------------|
+| `decompile` | C-like pseudocode for any function |
+| `find_string` | Regex search over binary string literals |
+| `find_writers` | GDB watchpoints to find what writes to an address |
+| `read_memory` | Read live game RAM |
+| `make_c2_hook` | Assemble PowerPC and inject C2 Gecko hooks |
+| `apply_gecko_code` | Hot-reload Gecko codes into the running game |
+| `press_button` | Inject controller input |
+| `capture_screenshot` | Grab the current frame from Dolphin |
+
 ### Key Features
 
 - **ISO survey** — uploads an ISO, extracts all executables, runs Ghidra auto-analysis with live progress streaming
@@ -45,10 +74,12 @@ Each task is independently configured with **capabilities** (static RE, Gecko in
 
 ```
 src/
+  api/           # FastAPI backend, SSE events, routes
   agent/         # Inspect AI task, prompts, tools, scorers, job spec system
-  dolphin/       # Dolphin runner, frame capture, memory tools, Gecko injection
-  ghidra/        # PyGhidra analysis, ISO parsing, binary cache
-  web/           # FastAPI app, frontend, SSE events, survey runner
+  core/
+    dolphin/     # Dolphin runner, frame capture, memory tools, Gecko injection
+    ghidra/      # PyGhidra analysis, ISO parsing, binary cache
+    knowledge/   # Findings, research docs, gecko code storage
 ```
 
 The agent runs via [Inspect AI](https://inspect.ai). Ghidra runs in-process via [PyGhidra](https://github.com/NationalSecurityAgency/ghidra/tree/master/Ghidra/Features/PyGhidra) (no subprocess). Dolphin runs headless via `dolphin-emu-nogui`.
@@ -100,3 +131,7 @@ uv run pytest
 ## AI Development Disclosure
 
 Yes, AI was heavily employed in the creation of this project. Shoutouts to claude for figuring out how to get ghidra and dolphin work in docker containers.
+
+## License
+
+[AGPL-3.0](LICENSE)
