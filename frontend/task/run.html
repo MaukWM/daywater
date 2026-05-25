@@ -122,7 +122,6 @@
           <div id="verdict-display"></div>
           <div id="result-gecko" hidden></div>
           <div class="btn-group" id="result-actions" hidden>
-            <a id="download-gecko-btn" style="display:inline-block; padding:0.4rem 1rem; border:1px solid var(--green-dim); color:var(--green); font-size:0.85rem;">Download Gecko Code</a>
             <a id="inspect-link" target="_blank">Open in Inspect</a>
           </div>
           <div id="result-frame-container" hidden>
@@ -612,14 +611,11 @@
       try {
         const result = await api('GET', `${TBASE}/result`);
 
-        // Verdict — only show for pixel_diff tasks that have real pass/fail criteria
-        const verdictEl = document.getElementById('verdict-display');
-        if (result.verdict && result.accuracy !== undefined && result.accuracy !== null && result.accuracy < 1.0) {
-          const isPass = result.verdict === 'PASS';
-          verdictEl.innerHTML = `<div class="verdict ${isPass ? 'pass' : 'fail'}">${result.verdict}</div>`;
-          verdictEl.innerHTML += `<div style="font-size:0.85rem; color:var(--text-dim); margin-bottom:0.75rem;">Accuracy: ${(result.accuracy * 100).toFixed(1)}%</div>`;
-        } else {
-          verdictEl.innerHTML = `<div class="verdict pass">Complete</div>`;
+        // Show status in results section
+        if (task.state === 'failed' || result.verdict === 'FAIL' || result.verdict === 'FAILED') {
+          document.getElementById('verdict-display').innerHTML = `<div class="verdict fail">Failed</div>`;
+        } else if (task.state === 'done') {
+          document.getElementById('verdict-display').innerHTML = `<div class="verdict pass">Complete</div>`;
         }
 
         // Gecko code
@@ -632,8 +628,6 @@
         // Actions
         const actionsEl = document.getElementById('result-actions');
         actionsEl.hidden = false;
-        document.getElementById('download-gecko-btn').href = `${TBASE}/result.gecko`;
-        document.getElementById('download-gecko-btn').download = 'result.gecko';
         // Result frame
         if (result.has_frame) {
           const frameContainer = document.getElementById('result-frame-container');

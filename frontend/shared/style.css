@@ -59,7 +59,8 @@ body:has(#demo-banner) #global-toolbar {
 
 body:has(#demo-banner) .proj-page,
 body:has(#demo-banner) .task-page,
-body:has(#demo-banner) #view-knowledge {
+body:has(#demo-banner) #view-knowledge,
+body:has(#demo-banner) .kb-overlay {
   top: var(--demo-banner-h, 0px);
 }
 
@@ -772,15 +773,15 @@ button.danger:hover:not(:disabled) {
 
 #inspect-link {
   display: inline-block;
-  border: 1px solid var(--border);
+  border: 1px solid #3a7cb8;
   padding: 0.4rem 1rem;
-  color: var(--text-dim);
+  color: #5ca8e0;
   font-size: 0.85rem;
 }
 
 #inspect-link:hover {
-  border-color: var(--green-dim);
-  color: var(--green);
+  border-color: #5ca8e0;
+  color: #80c0f0;
   text-decoration: none;
 }
 
