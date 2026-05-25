@@ -218,15 +218,17 @@ def search_strings(
     cache_dir: Path,
     pattern: str,
     *,
-    limit: int = 25,
+    limit: int = 50,
     case_insensitive: bool = True,
-) -> list[StringEntry]:
+) -> tuple[list[StringEntry], int]:
+    """Return ``(results[:limit], total_match_count)``."""
     flags = re.IGNORECASE if case_insensitive else 0
     regex = re.compile(pattern, flags)
     out: list[StringEntry] = []
+    total = 0
     for s in load_strings(cache_dir):
         if regex.search(s.text):
-            out.append(s)
-            if len(out) >= limit:
-                break
-    return out
+            total += 1
+            if len(out) < limit:
+                out.append(s)
+    return out, total

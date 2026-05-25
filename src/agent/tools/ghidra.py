@@ -295,7 +295,7 @@ def callers() -> Tool:
 def find_string() -> Tool:
     """Build the `find_string` tool."""
 
-    async def execute(pattern: str, limit: int = 25) -> str:
+    async def execute(pattern: str, limit: int = 50) -> str:
         """Regex-search defined strings in the active binary.
 
         Args:
@@ -309,7 +309,7 @@ def find_string() -> Tool:
         if cache_dir is None:
             return NO_BINARY_SELECTED_MSG
         try:
-            results = search_strings(cache_dir, pattern, limit=limit)
+            results, total = search_strings(cache_dir, pattern, limit=limit)
         except FileNotFoundError as exc:
             return f"Analysis cache not built: {exc}"
         except re.error as exc:
@@ -328,6 +328,12 @@ def find_string() -> Tool:
             if len(s.xrefs) > 6:
                 xrefs_disp += f" +{len(s.xrefs)-6} more"
             out.append(f"0x{s.addr}  \"{preview}\"\n    xrefs: {xrefs_disp}")
+        if total > len(results):
+            out.append(
+                f"\n⚠ Showing {len(results)} of {total} total matches. "
+                f"{total - len(results)} hidden — use a narrower pattern "
+                f"or increase limit to see more."
+            )
         return "\n".join(out)
 
     return execute

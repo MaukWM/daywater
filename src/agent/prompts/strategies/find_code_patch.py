@@ -107,20 +107,49 @@ iterate on existing codes instead of starting from scratch. Research docs may de
 
 ### Step 2: Look for a built-in debug/noclip mode FIRST
 
-Many GameCube games ship with debug fly/noclip/ghost modes that are just \
-disabled via a flag. This is the easiest and most robust path — a single \
-byte write to a global data address. Before trying anything else:
+Many GameCube/Wii games ship with debug fly/noclip/freecam modes that \
+are just disabled via a flag or an unused camera mode value. This is the \
+easiest and most robust path. Before building anything custom:
 
-1. Use `find_string()` to search for debug-related strings: `debug`, \
-   `fly`, `noclip`, `ghost`, `free`, `cam`, `cheat`, `god`. These often \
-   appear in debug menus or print statements near the flag check.
-2. Check the movement/player-update function for branches that test a \
-   global flag (a load from a fixed data-segment address like \
-   `0x8029xxxx` or `0x802Axxxx`, compared to zero). Decompile the \
-   movement function and look for early `if (DAT_802xxxxx != 0)` guards \
-   that switch between normal and debug movement modes.
-3. If you find a candidate flag, test it immediately with a Gecko code \
-   that sets it to 1 (or the expected value).
+**2a. String searches — use NARROW, SEPARATE searches (not one big regex):**
+
+Do NOT combine unrelated terms with `|` in one search — the result \
+limit means common words like "Free" or "Test" drown out the \
+useful hits. Run **separate** searches for each term:
+
+1. `find_string("noclip")`, then `find_string("fly")`, then \
+   `find_string("ghost")`, then `find_string("cheat")`
+2. `find_string("debug_cam")`, then `find_string("free_cam")`, then \
+   `find_string("freecam")`, then `find_string("DebugCam")`, then \
+   `find_string("FreeLook")`
+3. If those don't hit, think about what debug overlays might print — \
+   developers often leave printf-style HUD text in retail builds \
+   (gated behind a disabled flag). Search for terms a developer \
+   would use as labels in a camera/position debug readout.
+
+**2b. Camera mode dispatch analysis:**
+
+If you find a camera update function that uses a mode/type byte or \
+enum to dispatch behavior (e.g., a switch statement on `cam+0xNN`):
+
+1. **Enumerate ALL mode values**, not just the common ones (chase, \
+   follow, demo, replay). Higher or unused values often map to debug \
+   cameras that developers left in.
+2. For each branch target of the switch, quickly decompile it and \
+   check: does it read controller input directly? Does it reference \
+   debug format strings? Does it have unreferenced code paths?
+3. Debug cameras often read from **controller port 2**, not port 1. \
+   Look for input reads that use a different controller index or \
+   a different pad address than the main gameplay code.
+
+**2c. Flag check in the update function:**
+
+Check the movement/player-update function for branches that test a \
+global flag (a load from a fixed data-segment address, compared to \
+zero). Decompile the movement function and look for early \
+`if (DAT_802xxxxx != 0)` guards that switch between normal and debug \
+movement modes. If you find a candidate flag, test it immediately \
+with a Gecko code that sets it to 1 (or the expected value).
 
 Only proceed to Step 3 if no built-in debug mode is found.
 
@@ -136,6 +165,27 @@ GLOBAL/CODE addresses. Good targets:
   the fly/noclip state.
 - **Inject custom logic**: use `make_c2_hook(hook_addr, asm)` for complex \
   patches that need more than a single instruction change.
+
+**Camera/freecam hook placement — CRITICAL:**
+
+If building a custom freecam, hook point selection determines success \
+or failure:
+- Hook **AFTER** the normal camera pipeline completes but **BEFORE** \
+  the view matrix is submitted to the render system. If you hook at \
+  the entry of the camera update function, your eye/target writes \
+  will be **overwritten** by chase/follow camera logic before they \
+  reach the renderer.
+- Trace the camera update function to find where it calls the view \
+  submit function (often the last call). Hook the instruction \
+  immediately before that call.
+- Your hook should: (1) write eye + target coordinates to the camera \
+  struct, (2) rebuild the view matrix (call the game's MTXLookAt or \
+  equivalent), (3) fall through to the normal submit path.
+- Store persistent freecam state (position, angles, speed) in unused \
+  memory — look for dead code regions, debug menu data areas, or \
+  padding in the binary.
+- For controller input, identify the per-frame held-button word \
+  (not the edge/trigger word) so buttons produce continuous movement.
 
 **Always use `assemble_ppc` for instruction hex** — never hand-compute it.
 

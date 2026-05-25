@@ -177,19 +177,27 @@ async def run_agent(task: Task, project: Project) -> dict[str, Any]:
         loop = asyncio.get_event_loop()
 
         def _run() -> dict[str, Any]:
-            inspect_task = build_task_from_project_task(task, project, iso_path, extract_root)
+            inspect_task, session_cleanup = build_task_from_project_task(
+                task, project, iso_path, extract_root,
+            )
 
             # Model from env (INSPECT_EVAL_MODEL) or default to gpt-4o.
             import os
 
             model = os.environ.get("INSPECT_EVAL_MODEL", "openai/gpt-5.5")
-            results = inspect_eval(
-                inspect_task,
-                model=model,
-                log_dir=str(_LOGS_ROOT),
-            )
+            try:
+                results = inspect_eval(
+                    inspect_task,
+                    model=model,
+                    log_dir=str(_LOGS_ROOT),
+                )
+            except BaseException:
+                # Ensure dolphin is cleaned up if eval crashes before scorer runs
+                session_cleanup()
+                raise
 
             if not results:
+                session_cleanup()
                 return {"verdict": "FAILED", "error": "No eval results returned"}
 
             result = results[0]

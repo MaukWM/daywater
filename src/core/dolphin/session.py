@@ -527,49 +527,62 @@ class DolphinSession:
             env=env,
         )
 
-        logger.info(
-            "dolphin_session_started",
-            pid=proc.pid,
-            pipe=pipe_input,
-            watcher=bool(watch_addresses),
-            gdb=gdb_port,
-            gecko_codes=len(codes),
-        )
-
-        # Connect GDB stub if enabled.
-        # NOTE: Dolphin starts with the CPU PAUSED when GDB is on.
-        # We continue immediately so the savestate loads and the game
-        # runs. The find_writers() method will interrupt when it needs to.
-        gdb_client: GDBClient | None = None
-        if gdb_port is not None:
-            gdb_client = GDBClient(port=gdb_port)
-            gdb_client.connect(
-                timeout=_GDB_CONNECT_TIMEOUT,
-                proc=proc,
-                log_path=log_path,
+        try:
+            logger.info(
+                "dolphin_session_started",
+                pid=proc.pid,
+                pipe=pipe_input,
+                watcher=bool(watch_addresses),
+                gdb=gdb_port,
+                gecko_codes=len(codes),
             )
-            # Continue execution and consume the ACK
-            gdb_client.continue_execution()
-            # Drain any pending ACK so the socket is clean
-            time.sleep(0.2)
-            gdb_client._drain_pending()
-            logger.info("gdb_stub_connected", port=gdb_port)
 
-        # When launched via xvfb-run, proc.pid is xvfb-run, not dolphin.
-        # Find the real dolphin PID for memory reads.
-        dolphin_pid = proc.pid
-        if dolphin_args[0] == "xvfb-run":
-            dolphin_pid = _find_dolphin_child_pid(proc.pid)
+            # Connect GDB stub if enabled.
+            # NOTE: Dolphin starts with the CPU PAUSED when GDB is on.
+            # We continue immediately so the savestate loads and the game
+            # runs. The find_writers() method will interrupt when it needs to.
+            gdb_client: GDBClient | None = None
+            if gdb_port is not None:
+                gdb_client = GDBClient(port=gdb_port)
+                gdb_client.connect(
+                    timeout=_GDB_CONNECT_TIMEOUT,
+                    proc=proc,
+                    log_path=log_path,
+                )
+                # Continue execution and consume the ACK
+                gdb_client.continue_execution()
+                # Drain any pending ACK so the socket is clean
+                time.sleep(0.2)
+                gdb_client._drain_pending()
+                logger.info("gdb_stub_connected", port=gdb_port)
 
-        session = cls(
-            proc=proc,
-            pid=dolphin_pid,
-            user_dir=user_dir,
-            pipe_path=pipe_path,
-            _watcher=watcher,
-            _gdb=gdb_client,
-            _tmp_root=tmp_root,
-        )
+            # When launched via xvfb-run, proc.pid is xvfb-run, not dolphin.
+            # Find the real dolphin PID for memory reads.
+            dolphin_pid = proc.pid
+            if dolphin_args[0] == "xvfb-run":
+                dolphin_pid = _find_dolphin_child_pid(proc.pid)
+
+            session = cls(
+                proc=proc,
+                pid=dolphin_pid,
+                user_dir=user_dir,
+                pipe_path=pipe_path,
+                _watcher=watcher,
+                _gdb=gdb_client,
+                _tmp_root=tmp_root,
+            )
+        except BaseException:
+            # Kill orphaned dolphin process on any setup failure
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            logf.close()
+            if tmp_root is not None:
+                shutil.rmtree(tmp_root, ignore_errors=True)
+            raise
 
         try:
             yield session

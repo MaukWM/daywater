@@ -9,11 +9,17 @@ TOOLS_STATIC_ANALYSIS = """\
   (your renames included). Ghidra strips symbols by default so most \
   names look like `FUN_80123456`; this is most useful after you've \
   renamed functions.
-- `find_string(pattern, limit=25)` — regex over string literals in the \
+- `find_string(pattern, limit=50)` — regex over string literals in the \
   binary. For each match, returns the string + the functions that \
   reference it. **Hugely effective for finding code paths**: e.g. \
   search for `hud`, `draw`, `health`, debug-print fragments, etc., \
-  and you'll often land directly on the relevant function.
+  and you'll often land directly on the relevant function. \
+  If more matches exist than `limit`, a warning shows how many were \
+  hidden — use a narrower pattern or increase `limit` to see them. \
+  **Tip**: broad patterns like `free|cam|debug` often match noise \
+  ("Free Blocks", "FreeMem", "testcase"). **Prefer narrow, specific \
+  searches** — run `find_string("debug_cam")` separately from \
+  `find_string("noclip")` rather than combining into one big regex.
 - `decompile(addr_or_name)` — C-like pseudocode for one function. \
   Header shows the current name + your note (if any) + a compact \
   callees/callers summary. Body has your renames substituted (so \

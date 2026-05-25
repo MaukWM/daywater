@@ -7,7 +7,7 @@ prompts, tools, and scorers accordingly. No more per-task-type branches.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from inspect_ai import Task as InspectTask
 from inspect_ai.dataset import Sample
@@ -128,7 +128,7 @@ def build_task_from_project_task(
     project: Project,
     iso_path: Path,
     extract_root: Path,
-) -> InspectTask:
+) -> tuple[InspectTask, Callable[[], None]]:
     """Build a full Inspect AI Task from a web project task."""
     spec = task.config.get_job_spec()
 
@@ -206,7 +206,7 @@ def build_task_from_project_task(
     submit_desc = _submit_description(spec)
 
     task_name = task.config.name or f"task_{task.task_id}"
-    return InspectTask(
+    inspect_task = InspectTask(
         dataset=[sample],
         solver=basic_agent(
             init=system_message(system_prompt),
@@ -217,6 +217,7 @@ def build_task_from_project_task(
         scorer=scorer,
         name=task_name,
     )
+    return inspect_task, cleanup
 
 
 def _setup_session(
