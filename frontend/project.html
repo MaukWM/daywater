@@ -222,6 +222,7 @@ async function loadTasks() {
     }
 
     empty.hidden = true;
+    tasks.sort((a, b) => b.created_at - a.created_at);
     list.innerHTML = tasks.map(t => {
       const taskName = t.name || (t.preset || t.goal_type || 'task').replace(/_/g, ' ');
       const stateClass = t.state === 'crashed' ? 'state-crashed'
