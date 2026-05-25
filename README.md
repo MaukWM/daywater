@@ -22,6 +22,19 @@ Runs in a single docker container so no need to manually install any tooling. De
 ## Quick Start (Docker)
 
 ```bash
+# Pull and run the pre-built image
+docker run -d --name daywater \
+  --init --shm-size=2g --cap-add=SYS_PTRACE \
+  -p 7860:7860 -p 7575:7575 \
+  -v daywater-sessions:/app/sessions \
+  -v daywater-cache:/app/cache \
+  -v daywater-logs:/app/logs \
+  ghcr.io/maukwm/daywater:latest
+```
+
+Or clone and build from source:
+
+```bash
 git clone https://github.com/MaukWM/daywater.git
 cd daywater
 docker compose up --build -d
