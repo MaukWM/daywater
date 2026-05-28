@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Daywater — Settings</title>
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="stylesheet" href="/shared/style.css">
+  <style>
+    .settings-page {
+      max-width: 740px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 4rem;
+    }
+    .settings-page h1 {
+      font-size: 1rem;
+      color: var(--green);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.15rem;
+    }
+    .settings-page .subtitle {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+    }
+
+    /* ── Config list ─────────────────────────────────── */
+    .config-list { list-style: none; margin-bottom: 1rem; }
+
+    .config-item {
+      border: 1px solid var(--border);
+      padding: 0.65rem 0.9rem;
+      margin-bottom: -1px;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      transition: background 0.1s;
+      cursor: pointer;
+    }
+    .config-item:first-child { border-top-left-radius: 2px; border-top-right-radius: 2px; }
+    .config-item:last-child  { border-bottom-left-radius: 2px; border-bottom-right-radius: 2px; }
+    .config-item:hover { background: var(--surface-hover); }
+
+    .config-item.active {
+      border-left: 3px solid var(--green);
+      background: var(--green-bg);
+    }
+
+    .ci-radio {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .config-item.active .ci-radio {
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    .ci-info { flex: 1; min-width: 0; }
+
+    .ci-name {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .config-item.active .ci-name { color: var(--green); }
+
+    .ci-detail {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 0.1rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ci-badge {
+      font-size: 0.62rem;
+      padding: 0.1rem 0.4rem;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      flex-shrink: 0;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+    .ci-badge.proxy { color: var(--amber); border-color: var(--amber-dim); }
+
+    .ci-remove {
+      font-size: 0.68rem;
+      color: var(--red-dim);
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.1s;
+      flex-shrink: 0;
+      padding: 0.2rem 0.4rem;
+    }
+    .config-item:hover .ci-remove { opacity: 1; }
+    .ci-remove:hover { color: var(--red); }
+
+    .config-empty {
+      border: 1px dashed var(--border);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.82rem;
+    }
+
+    /* ── Add model flow ──────────────────────────────── */
+    .add-panel {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      padding: 1rem 1.2rem;
+      margin-top: 0.75rem;
+    }
+
+    .add-panel h3 {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+
+    .mode-tabs {
+      display: flex;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+
+    .mode-tab {
+      border: 1px solid var(--border);
+      border-bottom: none;
+      padding: 0.45rem 1rem;
+      font-family: inherit;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      background: transparent;
+      cursor: pointer;
+      margin-bottom: -1px;
+      transition: all 0.15s;
+    }
+    .mode-tab.active {
+      color: var(--green);
+      border-color: var(--border);
+      border-bottom: 1px solid var(--surface);
+      background: var(--surface);
+    }
+    .mode-tab:hover:not(.active) { color: var(--text); background: var(--surface-hover); }
+
+    .mode-content { display: none; }
+    .mode-content.active { display: block; }
+
+    /* ── Form elements ───────────────────────────────── */
+    .f-row { margin-bottom: 0.65rem; }
+
+    .f-label {
+      display: block;
+      font-size: 0.68rem;
+      color: var(--text-dim);
+      margin-bottom: 0.2rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .f-input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 0.6rem;
+      font-size: 0.82rem;
+      font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .f-input:focus { outline: none; border-color: var(--green-dim); }
+    .f-input::placeholder { color: var(--text-dim); }
+
+    select.f-input {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%235a6a7a'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 0.6rem center;
+      padding-right: 1.8rem;
+    }
+
+    .f-hint {
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+    }
+
+    .f-split { display: flex; gap: 0.75rem; }
+    .f-split > div { flex: 1; min-width: 0; }
+
+    /* ── Provider pills ──────────────────────────────── */
+    .provider-pills { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-bottom: 0.65rem; }
+
+    .p-pill {
+      font-family: inherit;
+      font-size: 0.7rem;
+      padding: 0.3rem 0.65rem;
+      background: var(--bg);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .p-pill:hover { border-color: var(--green-dim); color: var(--text); }
+    .p-pill.active { border-color: var(--green); color: var(--green); background: var(--green-bg); }
+
+    /* ── Model grid ──────────────────────────────────── */
+    .model-search {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-bottom: none;
+      color: var(--text);
+      padding: 0.4rem 0.6rem;
+      font-size: 0.75rem;
+      font-family: inherit;
+    }
+    .model-search:focus { outline: none; border-color: var(--green-dim); }
+    .model-search::placeholder { color: var(--text-dim); }
+
+    .model-grid {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .m-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.35rem 0.65rem;
+      border-bottom: 1px solid rgba(30,38,48,0.5);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: background 0.08s;
+    }
+    .m-row:last-child { border-bottom: none; }
+    .m-row:hover { background: var(--surface-hover); }
+    .m-row.selected { background: var(--green-bg); border-left: 2px solid var(--green); }
+
+    .m-row .m-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+    .m-row.selected .m-name { color: var(--green); font-weight: 600; }
+    .m-row .m-ctx { color: var(--text-dim); font-size: 0.65rem; flex-shrink: 0; min-width: 45px; text-align: right; font-variant-numeric: tabular-nums; }
+    .m-row .m-cost { color: var(--text-dim); font-size: 0.62rem; flex-shrink: 0; min-width: 100px; text-align: right; font-variant-numeric: tabular-nums; }
+
+    .model-count { font-size: 0.62rem; color: var(--text-dim); margin-top: 0.2rem; text-align: right; }
+
+    .no-models { padding: 1.2rem; text-align: center; color: var(--text-dim); font-size: 0.78rem; }
+
+    /* ── Key row ─────────────────────────────────────── */
+    .key-row { display: flex; gap: 0.4rem; }
+    .key-row .f-input { flex: 1; }
+    .key-vis { font-family: inherit; font-size: 0.65rem; padding: 0.35rem 0.5rem; background: transparent; color: var(--text-dim); border: 1px solid var(--border); cursor: pointer; }
+    .key-vis:hover { color: var(--text); border-color: var(--text-dim); }
+
+    /* ── Actions ─────────────────────────────────────── */
+    .add-actions { display: flex; gap: 0.5rem; margin-top: 1rem; align-items: center; }
+    .add-status { font-size: 0.75rem; margin-left: 0.5rem; word-break: break-word; max-width: 400px; }
+    .add-status.ok { color: var(--green); }
+    .add-status.err { color: var(--red); }
+
+    /* ── Section label ───────────────────────────────── */
+    .s-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--green-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin: 0 0 0.6rem;
+      padding-bottom: 0.3rem;
+      border-bottom: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <div class="settings-page">
+    <div class="breadcrumb">
+      <a href="/index.html">projects</a><span class="sep">/</span><span>settings</span>
+    </div>
+
+    <h1>Settings</h1>
+    <p class="subtitle">manage model configurations for agent runs</p>
+
+    <!-- ── Config list ───────────────────────────────────────────── -->
+    <div class="s-label">Model Configurations</div>
+    <ul class="config-list" id="config-list"></ul>
+
+    <button id="add-btn" onclick="toggleAddPanel()">+ Add Model</button>
+
+    <!-- ── Add model panel ───────────────────────────────────────── -->
+    <div class="add-panel" id="add-panel" hidden>
+      <h3>Add Model Configuration</h3>
+
+      <div class="mode-tabs">
+        <button class="mode-tab active" onclick="switchMode('catalog')">From Catalog</button>
+        <button class="mode-tab" onclick="switchMode('custom')">Custom Endpoint</button>
+      </div>
+
+      <!-- ── Catalog mode ──────────────────────────────────────── -->
+      <div class="mode-content active" id="mode-catalog">
+        <div class="f-row">
+          <label class="f-label">Provider</label>
+          <div class="provider-pills" id="provider-pills"></div>
+        </div>
+
+        <div class="f-row">
+          <label class="f-label">Model</label>
+          <input type="text" class="model-search" id="model-search" placeholder="filter..." oninput="renderModels()">
+          <div class="model-grid" id="model-grid"><div class="no-models">loading...</div></div>
+          <div class="model-count" id="model-count"></div>
+        </div>
+
+        <div class="f-split">
+          <div class="f-row">
+            <label class="f-label">Display Name</label>
+            <input type="text" class="f-input" id="cat-name" placeholder="e.g. Claude Sonnet">
+          </div>
+          <div class="f-row">
+            <label class="f-label">API Key</label>
+            <div class="key-row">
+              <input type="password" class="f-input" id="cat-key" placeholder="sk-...">
+              <button class="key-vis" onclick="toggleVis('cat-key')">show</button>
+            </div>
+          </div>
+        </div>
+        <div class="f-hint" id="cat-hint">Select a provider and model above.</div>
+      </div>
+
+      <!-- ── Custom endpoint mode ──────────────────────────────── -->
+      <div class="mode-content" id="mode-custom">
+        <div class="f-split">
+          <div class="f-row">
+            <label class="f-label">Display Name</label>
+            <input type="text" class="f-input" id="cust-name" placeholder="e.g. Claude via Proxy">
+          </div>
+          <div class="f-row">
+            <label class="f-label">Model String</label>
+            <input type="text" class="f-input" id="cust-model" placeholder="openai/claude-sonnet-4-6">
+          </div>
+        </div>
+
+        <div class="f-row">
+          <label class="f-label">Base URL</label>
+          <input type="text" class="f-input" id="cust-url" placeholder="http://your-proxy:8082">
+          <div class="f-hint">OpenAI-compatible endpoint URL. Sets <code style="color:var(--amber);font-size:0.65rem;">OPENAI_BASE_URL</code>.</div>
+        </div>
+
+        <div class="f-row">
+          <label class="f-label">API Key (optional)</label>
+          <div class="key-row">
+            <input type="password" class="f-input" id="cust-key" placeholder="sk-... or leave empty">
+            <button class="key-vis" onclick="toggleVis('cust-key')">show</button>
+          </div>
+          <div class="f-hint">Some proxies require a dummy key (any value). Leave empty if not needed.</div>
+        </div>
+      </div>
+
+      <div class="add-actions">
+        <button class="primary" onclick="saveConfig()">Add</button>
+        <button onclick="testConfig()">Test</button>
+        <button onclick="toggleAddPanel()" style="color:var(--text-dim); border-color:var(--border);">Cancel</button>
+        <span class="add-status" id="add-status"></span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { api } from './shared/api.js';
+    import { renderLayout } from './shared/layout.js';
+    renderLayout();
+
+    // ── State ──────────────────────────────────────────────────────── //
+    let configs = [];
+    let activeId = '';
+    let allModels = {};
+    let allProviders = [];
+    let envVars = {};
+    let selProvider = '';
+    let selModelId = '';
+    let currentMode = 'catalog';
+
+    // ── Init ───────────────────────────────────────────────────────── //
+    async function init() {
+      const [s, m] = await Promise.all([
+        api('GET', '/api/settings'),
+        api('GET', '/api/settings/models'),
+      ]);
+      configs = s.model_configs || [];
+      activeId = s.active_model_config || '';
+      allModels = m.models;
+      allProviders = m.providers;
+      envVars = m.env_vars;
+      selProvider = allProviders[0] || '';
+      renderConfigs();
+      renderProviderPills();
+      renderModels();
+    }
+    init().catch(e => console.error('init:', e));
+
+    // ── Config list ────────────────────────────────────────────────── //
+    function renderConfigs() {
+      const el = document.getElementById('config-list');
+      if (!configs.length) {
+        el.innerHTML = '<div class="config-empty">No model configurations yet. Click "+ Add Model" to get started.</div>';
+        return;
+      }
+      el.innerHTML = configs.map(c => {
+        const isActive = c.id === activeId;
+        const isProxy = !!c.base_url;
+        const detail = isProxy ? `${c.model} via ${c.base_url}` : c.model;
+        return `<li class="config-item${isActive ? ' active' : ''}" onclick="window._activate('${c.id}')">
+          <div class="ci-radio"></div>
+          <div class="ci-info">
+            <div class="ci-name">${esc(c.name)}</div>
+            <div class="ci-detail">${esc(detail)}${c.api_key_preview ? ' &middot; key: ' + esc(c.api_key_preview) : ''}</div>
+          </div>
+          ${isProxy ? '<span class="ci-badge proxy">proxy</span>' : '<span class="ci-badge">api</span>'}
+          <span class="ci-remove" onclick="event.stopPropagation(); window._remove('${c.id}')">remove</span>
+        </li>`;
+      }).join('');
+    }
+
+    function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+    window._activate = async (id) => {
+      await api('POST', `/api/settings/configs/${id}/activate`);
+      activeId = id;
+      renderConfigs();
+    };
+
+    window._remove = async (id) => {
+      if (!confirm('Remove this model configuration?')) return;
+      await api('DELETE', `/api/settings/configs/${id}`);
+      configs = configs.filter(c => c.id !== id);
+      if (activeId === id) activeId = configs.length ? configs[0].id : '';
+      renderConfigs();
+    };
+
+    // ── Add panel toggle ───────────────────────────────────────────── //
+    window.toggleAddPanel = () => {
+      const p = document.getElementById('add-panel');
+      p.hidden = !p.hidden;
+      document.getElementById('add-status').textContent = '';
+    };
+
+    // ── Mode tabs ──────────────────────────────────────────────────── //
+    window.switchMode = (mode) => {
+      currentMode = mode;
+      document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase().includes(mode === 'catalog' ? 'catalog' : 'custom')));
+      document.getElementById('mode-catalog').classList.toggle('active', mode === 'catalog');
+      document.getElementById('mode-custom').classList.toggle('active', mode === 'custom');
+    };
+
+    // ── Provider pills ─────────────────────────────────────────────── //
+    function renderProviderPills() {
+      document.getElementById('provider-pills').innerHTML = allProviders.map(p =>
+        `<button class="p-pill${p === selProvider ? ' active' : ''}" onclick="window._selProv('${p}')">${p}</button>`
+      ).join('');
+    }
+
+    window._selProv = (p) => {
+      selProvider = p;
+      selModelId = '';
+      renderProviderPills();
+      renderModels();
+      updateCatHint();
+    };
+
+    // ── Model grid ─────────────────────────────────────────────────── //
+    function renderModels() {
+      const grid = document.getElementById('model-grid');
+      const count = document.getElementById('model-count');
+      const q = document.getElementById('model-search').value.toLowerCase();
+      const models = (allModels[selProvider] || []).filter(m => !q || m.id.toLowerCase().includes(q));
+
+      if (!models.length) {
+        grid.innerHTML = '<div class="no-models">no models</div>';
+        count.textContent = '';
+        return;
+      }
+
+      grid.innerHTML = models.map(m => {
+        const sel = m.id === selModelId ? ' selected' : '';
+        const ctx = m.max_input_tokens >= 1000 ? Math.round(m.max_input_tokens / 1000) + 'K' : m.max_input_tokens;
+        const cost = m.input_cost_per_1k > 0 ? `$${m.input_cost_per_1k}/$${m.output_cost_per_1k} /1K` : '';
+        return `<div class="m-row${sel}" onclick="window._selModel('${m.id}')">
+          <span class="m-name">${m.id}</span>
+          <span class="m-ctx">${ctx}</span>
+          <span class="m-cost">${cost}</span>
+        </div>`;
+      }).join('');
+      count.textContent = `${models.length} model${models.length !== 1 ? 's' : ''}`;
+    }
+
+    window.renderModels = renderModels;
+
+    window._selModel = (id) => {
+      selModelId = id;
+      renderModels();
+      // Auto-fill name from model id
+      const nameInput = document.getElementById('cat-name');
+      if (!nameInput.value) {
+        // Prettify: "claude-sonnet-4-5-20250514" → "Claude Sonnet 4.5"
+        const short = id.replace(/-\d{8,}$/, '').replace(/-/g, ' ');
+        nameInput.value = short.charAt(0).toUpperCase() + short.slice(1);
+      }
+      updateCatHint();
+    };
+
+    function updateCatHint() {
+      const hint = document.getElementById('cat-hint');
+      const ev = envVars[selProvider] || '';
+      if (selModelId && ev) {
+        hint.innerHTML = `Selected: <span style="color:var(--green)">${selModelId}</span> &middot; needs <code style="color:var(--amber);font-size:0.65rem;">${ev}</code>`;
+      } else if (selModelId) {
+        hint.innerHTML = `Selected: <span style="color:var(--green)">${selModelId}</span>`;
+      } else {
+        hint.textContent = 'Select a provider and model above.';
+      }
+    }
+
+    // ── Key visibility ─────────────────────────────────────────────── //
+    window.toggleVis = (inputId) => {
+      const i = document.getElementById(inputId);
+      const b = i.nextElementSibling;
+      if (i.type === 'password') { i.type = 'text'; b.textContent = 'hide'; }
+      else { i.type = 'password'; b.textContent = 'show'; }
+    };
+
+    // ── Save config ────────────────────────────────────────────────── //
+    /** Ensure model has a provider/ prefix (e.g. "gpt-5.5" → "openai/gpt-5.5"). */
+    function qualifiedModel(modelId, provider) {
+      if (modelId.includes('/')) return modelId;  // already prefixed
+      return provider + '/' + modelId;
+    }
+
+    window.saveConfig = async () => {
+      const status = document.getElementById('add-status');
+      let body;
+
+      if (currentMode === 'catalog') {
+        const name = document.getElementById('cat-name').value.trim();
+        const key = document.getElementById('cat-key').value.trim();
+        if (!selModelId) { status.textContent = 'Select a model.'; status.className = 'add-status err'; return; }
+        const model = qualifiedModel(selModelId, selProvider);
+        body = { name: name || model, model, api_key: key };
+      } else {
+        const name = document.getElementById('cust-name').value.trim();
+        const model = document.getElementById('cust-model').value.trim();
+        const url = document.getElementById('cust-url').value.trim();
+        const key = document.getElementById('cust-key').value.trim();
+        if (!model) { status.textContent = 'Model string required.'; status.className = 'add-status err'; return; }
+        body = { name: name || model, model, api_key: key, base_url: url };
+      }
+
+      try {
+        const res = await api('POST', '/api/settings/configs', body);
+        if (!res.ok) { status.textContent = res.error || 'Failed'; status.className = 'add-status err'; return; }
+
+        // Refresh
+        const s = await api('GET', '/api/settings');
+        configs = s.model_configs || [];
+        activeId = s.active_model_config || '';
+        renderConfigs();
+
+        // Clear form
+        document.getElementById('cat-name').value = '';
+        document.getElementById('cat-key').value = '';
+        document.getElementById('cust-name').value = '';
+        document.getElementById('cust-model').value = '';
+        document.getElementById('cust-url').value = '';
+        document.getElementById('cust-key').value = '';
+        selModelId = '';
+        renderModels();
+
+        status.textContent = 'Added!';
+        status.className = 'add-status ok';
+        setTimeout(() => { status.textContent = ''; }, 2000);
+      } catch (err) {
+        status.textContent = err.message;
+        status.className = 'add-status err';
+      }
+    };
+
+    // ── Test config ────────────────────────────────────────────────── //
+    window.testConfig = async () => {
+      const status = document.getElementById('add-status');
+      let key, model, base_url;
+
+      if (currentMode === 'catalog') {
+        key = document.getElementById('cat-key').value.trim();
+        model = qualifiedModel(selModelId, selProvider);
+      } else {
+        key = document.getElementById('cust-key').value.trim();
+        model = document.getElementById('cust-model').value.trim();
+        base_url = document.getElementById('cust-url').value.trim();
+      }
+
+      if (!model) { status.textContent = 'Select a model first.'; status.className = 'add-status err'; return; }
+
+      status.textContent = 'Testing...';
+      status.className = 'add-status';
+      status.style.color = 'var(--amber)';
+
+      try {
+        const payload = { api_key: key, model };
+        if (base_url) payload.base_url = base_url;
+        const res = await api('POST', '/api/setup/test-key', payload);
+        if (res.ok) {
+          status.textContent = res.warning || 'Connection OK.';
+          status.className = 'add-status ok';
+        } else {
+          status.textContent = res.error || 'Failed';
+          status.className = 'add-status err';
+        }
+      } catch (err) {
+        status.textContent = err.message;
+        status.className = 'add-status err';
+      }
+    };
+  </script>
+</body>
+</html>

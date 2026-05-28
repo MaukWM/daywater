@@ -31,18 +31,18 @@
       <div class="setup-step-desc">Configure the LLM backend used for agent runs.</div>
 
       <div class="setup-field">
-        <label class="setup-label" for="api-key">API Key</label>
+        <label class="setup-label" for="model">Model</label>
+        <input type="text" id="model" class="setup-input" value="openai/gpt-5.5" placeholder="provider/model-name" oninput="updateProviderHint()">
+        <div class="setup-field-hint">e.g. openai/gpt-5.5, anthropic/claude-sonnet-4-5-20250514</div>
+      </div>
+
+      <div class="setup-field">
+        <label class="setup-label" for="api-key">API Key <span id="provider-badge" style="font-size:0.7rem; color:var(--green-dim); font-weight:normal;"></span></label>
         <div style="display:flex; gap:0.4rem;">
           <input type="password" id="api-key" class="setup-input" placeholder="sk-..." style="flex:1;">
           <button type="button" id="key-vis-btn" onclick="toggleKeyVisibility()">show</button>
         </div>
-        <div class="setup-field-hint">Your OpenAI (or compatible) API key.</div>
-      </div>
-
-      <div class="setup-field">
-        <label class="setup-label" for="model">Model</label>
-        <input type="text" id="model" class="setup-input" value="openai/gpt-5.5" placeholder="openai/gpt-5.5">
-        <div class="setup-field-hint">e.g. openai/gpt-5.5, anthropic/claude-sonnet-4-5-20250514</div>
+        <div id="provider-hint" class="setup-field-hint">API key for the selected provider.</div>
       </div>
 
       <div style="display:flex; align-items:center; gap:0.75rem; margin-top:1rem;">
@@ -103,6 +103,33 @@
     // Expose helpers to inline onclick handlers
     let currentStep = 1;
 
+    function detectProvider(model) {
+      if (!model || !model.includes('/')) return '';
+      return model.split('/')[0];
+    }
+
+    // ── Provider hint ───────────────────────────────────────────────── //
+
+    window.updateProviderHint = function updateProviderHint() {
+      const model = document.getElementById('model').value.trim();
+      const badge = document.getElementById('provider-badge');
+      const hint = document.getElementById('provider-hint');
+      const keyInput = document.getElementById('api-key');
+      const provider = detectProvider(model);
+
+      if (provider) {
+        badge.textContent = `(${provider})`;
+        hint.textContent = `API key for ${provider}. Will be stored separately per provider.`;
+        keyInput.disabled = false;
+        keyInput.placeholder = 'sk-...';
+      } else {
+        badge.textContent = '';
+        hint.textContent = 'Enter a model in provider/name format (e.g. openai/gpt-5.5).';
+        keyInput.disabled = false;
+        keyInput.placeholder = 'sk-...';
+      }
+    };
+
     // ── Step navigation ──────────────────────────────────────────────── //
 
     window.goStep = function goStep(n) {
@@ -140,6 +167,13 @@
       const result = document.getElementById('test-result');
       const nextBtn = document.getElementById('next-1');
 
+      if (!modelVal) {
+        result.hidden = false;
+        result.className = 'setup-test-result error';
+        result.textContent = 'Please enter a model.';
+        return;
+      }
+
       if (!keyVal) {
         result.hidden = false;
         result.className = 'setup-test-result error';
@@ -152,19 +186,25 @@
       result.textContent = 'Testing...';
 
       try {
-        await api('POST', '/api/setup/test-key', {
-          openai_api_key: keyVal,
+        const res = await api('POST', '/api/setup/test-key', {
+          api_key: keyVal,
           model: modelVal || 'openai/gpt-5.5',
         });
 
-        // Save settings on success
-        await api('POST', '/api/settings', {
-          openai_api_key: keyVal,
+        // Save as a model config on success
+        await api('POST', '/api/settings/configs', {
+          name: modelVal,
           model: modelVal || 'openai/gpt-5.5',
+          api_key: keyVal,
         });
 
-        result.className = 'setup-test-result ok';
-        result.textContent = 'Connection OK — key saved.';
+        if (res.warning) {
+          result.className = 'setup-test-result ok';
+          result.textContent = res.warning;
+        } else {
+          result.className = 'setup-test-result ok';
+          result.textContent = 'Connection OK — saved.';
+        }
         nextBtn.disabled = false;
       } catch (err) {
         result.className = 'setup-test-result error';
@@ -246,6 +286,7 @@
 
     // ── Init ─────────────────────────────────────────────────────────── //
     updateDots();
+    window.updateProviderHint();
   </script>
 </body>
 </html>

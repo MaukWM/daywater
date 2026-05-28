@@ -17,6 +17,7 @@ dependencies = [
     # Agent runtime
     "inspect-ai>=0.3.140",
     "openai>=1.40.0",
+    "litellm>=1.30.0",
     # Static analysis (Ghidra-as-a-library; requires DAYWATER_GHIDRA_HOME)
     "pyghidra>=2.0.0",
     # PPC assembler for Gecko code authoring (§4.7 in OPEN_QUESTIONS)

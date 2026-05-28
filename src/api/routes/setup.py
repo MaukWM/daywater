@@ -5,39 +5,53 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks
 from fastapi.responses import StreamingResponse
 
-from src.core.config import web_settings
+from src.core.config import env_var_for_provider, provider_from_model, web_settings  # noqa: F401
 
 router = APIRouter()
 
 
 @router.post("/api/setup/test-key")
 async def test_api_key(body: dict) -> dict:  # type: ignore[type-arg]
-    """Test an API key by making a minimal inference call."""
+    """Test an API key via a minimal LiteLLM completion call."""
     import os
 
-    key = body.get("openai_api_key", "").strip()
-    model = body.get("model", "openai/gpt-5.5").strip()
+    key = body.get("api_key", "").strip()
+    model = body.get("model", "").strip()
+    base_url = body.get("base_url", "").strip()
+    provider = body.get("provider", "").strip() or (provider_from_model(model) if model else "")
 
     if not key:
         return {"ok": False, "error": "No API key provided"}
+    if not provider or not model:
+        return {"ok": False, "error": "Cannot detect provider — set a model like openai/gpt-5.5"}
 
-    # Set key temporarily for the test
-    old_key = os.environ.get("OPENAI_API_KEY")
-    os.environ["OPENAI_API_KEY"] = key
+    env_var = env_var_for_provider(provider)
+
+    # Temporarily set the key for the test.
+    old_val = os.environ.get(env_var) if env_var else None
+    if env_var:
+        os.environ[env_var] = key
 
     try:
-        import openai
+        import litellm
 
-        client = openai.OpenAI(api_key=key)
-        client.models.list()
+        kwargs: dict[str, object] = {
+            "model": model,
+            "messages": [{"role": "user", "content": "say ok"}],
+            "max_tokens": 100,
+        }
+        if base_url:
+            kwargs["base_url"] = base_url
+        litellm.completion(**kwargs)  # type: ignore[arg-type]
         return {"ok": True}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
     finally:
-        if old_key is not None:
-            os.environ["OPENAI_API_KEY"] = old_key
-        elif "OPENAI_API_KEY" in os.environ:
-            del os.environ["OPENAI_API_KEY"]
+        if env_var:
+            if old_val is not None:
+                os.environ[env_var] = old_val
+            else:
+                os.environ.pop(env_var, None)
 
 
 @router.post("/api/setup/init-ghidra")
