@@ -152,32 +152,37 @@ async def get_knowledge(project_id: str) -> dict:  # type: ignore[type-arg]
     fs = FindingsStore.load(project.root)
     findings = [asdict(f) for f in fs.list_all()]
 
-    # Ghidra notes/renames from all analyzed binaries
+    # Ghidra notes/renames from this project's analyzed binaries only
     cache_root = binaries_cache()
 
     renames: list[dict[str, str]] = []
     notes: list[dict[str, str]] = []
 
-    if cache_root.exists():
-        for sha_dir in sorted(cache_root.iterdir()):
-            notes_path = sha_dir / "notes.json"
-            if not notes_path.exists():
-                continue
-            ns = NotesStore.load(sha_dir)
-            sha1 = sha_dir.name
-            for addr, entry in ns.renames.items():
-                renames.append({
-                    "address": addr,
-                    "name": entry.get("value", ""),
-                    "binary": sha1[:8],
-                    "task_id": entry.get("task_id", ""),
-                })
-            for addr, entry in ns.notes.items():
-                notes.append({
-                    "address": addr,
-                    "text": entry.get("value", ""),
-                    "binary": sha1[:8],
-                    "task_id": entry.get("task_id", ""),
-                })
+    project_sha1s = {
+        str(info["sha1"])
+        for info in project.config.analyzed_binaries.values()
+        if "sha1" in info
+    }
+
+    for sha1 in sorted(project_sha1s):
+        sha_dir = cache_root / sha1
+        notes_path = sha_dir / "notes.json"
+        if not notes_path.exists():
+            continue
+        ns = NotesStore.load(sha_dir)
+        for addr, entry in ns.renames.items():
+            renames.append({
+                "address": addr,
+                "name": entry.get("value", ""),
+                "binary": sha1[:8],
+                "task_id": entry.get("task_id", ""),
+            })
+        for addr, entry in ns.notes.items():
+            notes.append({
+                "address": addr,
+                "text": entry.get("value", ""),
+                "binary": sha1[:8],
+                "task_id": entry.get("task_id", ""),
+            })
 
     return {"findings": findings, "renames": renames, "notes": notes}
